@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "dev:mock": "VITE_MOCK=1 vite",
+    "dev:hybrid": "VITE_MOCK=hybrid vite",
     "build": "tsc -b && vite build",
     "build:mock": "tsc -b && VITE_MOCK=1 vite build",
     "lint": "oxlint",

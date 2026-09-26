@@ -110,11 +110,12 @@ export function useHoldToTalk(onFinal: (text: string) => void) {
   return { listening, interim, error, start, stop }
 }
 
-// Map a spoken answer to option 0/1/2: "A", "option B", "second", "three", "see"…
+// Map a spoken answer to option 0–3: "A", "option B", "second", "three", "see"…
 const CHOICE_WORDS: Record<string, number> = {
   a: 0, ay: 0, eh: 0, one: 0, '1': 0, first: 0,
   b: 1, be: 1, bee: 1, two: 1, '2': 1, second: 1,
   c: 2, see: 2, sea: 2, three: 2, '3': 2, third: 2,
+  d: 3, dee: 3, four: 3, '4': 3, fourth: 3,
 }
 export function parseChoice(text: string): number | null {
   const words = text.toLowerCase().replace(/[^a-z0-9 ]/g, ' ').split(/\s+/).filter(Boolean)

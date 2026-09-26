@@ -53,7 +53,7 @@ Endpoints marked **addition** aren't in the spec's §6 table but the screens nee
 
 | Method | Path | Body / query | Returns |
 |---|---|---|---|
-| GET | `/api/play/rounds` | `?user_id&eta` | `RoundsResponse` |
+| GET | `/api/play/rounds` | `?user_id&eta` (+ optional `preview=1`) | `RoundsResponse` — with `preview=1` (home screen) it's read-only: don't create or reserve rounds |
 | POST | `/api/play/answer` | `{ user_id, question_id, chosen, open_text? }` | `AnswerResponse` |
 | POST | `/api/play/finish` **addition** | `{ user_id, question_ids }` | `FinishResponse` |
 
@@ -110,3 +110,6 @@ Dashboard = {
 
 - `npm run dev` proxies `/api` to `http://localhost:8080` (override with `API_TARGET=… npm run dev`).
 - `npm run dev:mock` runs the UI with the browser-side mock instead; no backend needed.
+- `npm run dev:hybrid` mocks everything except what upshift-backend can already do: "Generate pack" for a PDF
+  calls `POST /api/admin/documents/questions` (needs `VITE_ADMIN_KEY` in `upshift-ui/.env.local`, matching
+  `ADMIN_API_KEY` in `upshift-backend/.env`), and the phone's news rounds use `POST /api/questions/generate` + `/evaluate`.

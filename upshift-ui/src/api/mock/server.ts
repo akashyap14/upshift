@@ -1,6 +1,9 @@
 // Browser-side mock of the Upshift v3 API, for building the UI before upshift-backend has it.
 // Enabled with `npm run dev:mock` (VITE_MOCK=1). State lives in localStorage; reset with
 // localStorage.removeItem('upshift.mock.v1'). Follows spec §4 points rules and §5.2 quote check.
+// `npm run dev:hybrid` (VITE_MOCK=hybrid) sends PDF question generation and news rounds to the
+// real upshift-backend (see ./backend.ts) and mocks the rest.
+import { byId } from '../../lib/professions'
 import type {
   AnswerResponse,
   Dashboard,
@@ -26,8 +29,14 @@ import {
   SEED_USERS,
   type SeedQuestion,
 } from './seed'
+import { BackendError, gradeNews, newsQuestions, questionsFromPdf } from './backend'
 
 const STORE = 'upshift.mock.v1'
+// Hybrid mode state: the real fetch, and uploaded PDFs (kept in memory until the page reloads)
+let hybrid = false
+let realFetch: typeof fetch = fetch
+const pdfs = new Map<number, File>()
+const MAX_BACKEND_NEWS = 5
 const DAY = 864e5
 const DAILY_CAP = 200
 const POINTS = { correct: 10, second: 5, ride: 5, packOnTime: 20, streak5: 15 }
@@ -35,7 +44,20 @@ const POINTS = { correct: 10, second: 5, ride: 5, packOnTime: 20, streak5: 15 }
 interface UserRow { id: number; company_id: number; name: string; role: Role; team: string; profession: string; level: Level; points: number }
 interface DocRow { id: number; company_id: number; title: string; filename: string; mime: string; text: string; uploaded_by: number; created_at: string }
 interface PackRow { id: number; company_id: number; document_id: number | null; title: string; profession: string; level: Level; status: PackStatus; kind: 'company' | 'news'; created_at: string }
-interface QuestionRow extends SeedQuestion { id: number; pack_id: number; verified: boolean }
+interface QuestionRow extends Omit<SeedQuestion, 'options' | 'best'> {
+  id: number
+  pack_id: number
+  verified: boolean
+  /** Three options, or four for backend news rounds */
+  options: string[]
+  /** -1 until a backend news round is graded */
+  best: number
+  /** Hybrid: written by upshift-backend, which checks the source page itself */
+  server_checked?: boolean
+  /** Hybrid: the backend quiz holding this news round */
+  quiz_id?: string
+  backend_question_id?: number
+}
 interface AssignmentRow { id: number; pack_id: number; team: string; due_date: string }
 interface AnswerRow { id: number; user_id: number; question_id: number; chosen: number; correct: boolean; open_score: number | null; points: number; created_at: string }
 interface RewardRow { id: number; title: string; kind: RewardKind; cost_points: number; sponsor_name: string | null; stock: number }
@@ -120,6 +142,10 @@ function load(): Db {
 function save(db: Db) {
   localStorage.setItem(STORE, JSON.stringify(db))
 }
+// After awaiting the real backend, pick up changes other requests saved meanwhile
+function refresh(db: Db) {
+  Object.assign(db, load())
+}
 
 // ---------- Helpers ----------
 function dateOnly(ms: number) {
@@ -173,8 +199,8 @@ function questionOut(q: QuestionRow) {
     type: q.type,
     scenario: q.scenario,
     question: q.question,
-    options: q.options,
-    best: q.best,
+    options: q.options as [string, string, string],
+    best: q.best as 0 | 1 | 2,
     second_best: q.second_best,
     why: q.why,
     source_quote: q.source_quote,
@@ -298,6 +324,7 @@ route('POST', '/docs', async ({ db, body }) => {
   const title = String(fd.get('title') || file.name.replace(/\.[^.]+$/, ''))
   const doc: DocRow = { id: db.nextId++, company_id: COMPANY.id, title, filename: file.name, mime: file.type || ext, text, uploaded_by: 0, created_at: new Date().toISOString() }
   db.documents.push(doc)
+  if (hybrid && ext === 'pdf') pdfs.set(doc.id, file)
   return { id: doc.id, title, filename: doc.filename, mime: doc.mime, words: wordCount(text), created_at: doc.created_at, packs: 0 }
 })
 route('DELETE', '/docs/:id', ({ db, params }) => {
@@ -312,10 +339,19 @@ route('DELETE', '/docs/:id', ({ db, params }) => {
 route('POST', '/docs/:id/generate', async ({ db, params, body }) => {
   const doc = db.documents.find((d) => d.id === Number(params[0])) ?? fail(404, 'Document not found.')
   const { profession = 'all', level = 2, count = 8 } = (body ?? {}) as { profession?: string; level?: Level; count?: number }
-  await new Promise((r) => setTimeout(r, 1800)) // feels like the model thinking
+  const n = Math.max(3, Math.min(15, count))
+  let qs: Omit<QuestionRow, 'id' | 'pack_id'>[]
+  if (hybrid && doc.filename.toLowerCase().endsWith('.pdf')) {
+    const file = pdfs.get(doc.id) ?? fail(409, 'Upload this PDF again: in hybrid mode the file is only kept until the page reloads.')
+    qs = (await questionsFromPdf(realFetch, file, n, level)).map((q) => ({ ...q, server_checked: true }))
+  } else {
+    await new Promise((r) => setTimeout(r, 1800)) // feels like the model thinking
+    qs = generateFrom(doc, n)
+  }
+  refresh(db)
   const pack: PackRow = { id: db.nextId++, company_id: COMPANY.id, document_id: doc.id, title: doc.title, profession, level, status: 'draft', kind: 'company', created_at: new Date().toISOString() }
   db.packs.push(pack)
-  for (const q of generateFrom(doc, Math.max(3, Math.min(15, count)))) db.questions.push({ ...q, id: db.nextId++, pack_id: pack.id })
+  for (const q of qs) db.questions.push({ ...q, id: db.nextId++, pack_id: pack.id })
   return { pack_id: pack.id }
 })
 
@@ -346,7 +382,8 @@ route('PATCH', '/questions/:id', ({ db, params, body }) => {
   const p = db.packs.find((x) => x.id === q.pack_id)!
   Object.assign(q, body as Partial<QuestionRow>)
   const doc = packDoc(db, p)
-  q.verified = doc ? quoteFound(q.source_quote, doc.text) : true
+  // Backend questions carry a checked page instead of a quote: fixing one means giving a valid page
+  q.verified = q.server_checked ? /^Page \d+$/.test(q.source_location.trim()) : doc ? quoteFound(q.source_quote, doc.text) : true
   return questionOut(q)
 })
 route('DELETE', '/questions/:id', ({ db, params }) => {
@@ -356,6 +393,16 @@ route('DELETE', '/questions/:id', ({ db, params }) => {
 route('POST', '/questions/:id/regenerate', async ({ db, params }) => {
   const q = db.questions.find((x) => x.id === Number(params[0])) ?? fail(404, 'Question not found.')
   const doc = packDoc(db, db.packs.find((p) => p.id === q.pack_id)!) ?? fail(400, 'Only document questions can be regenerated.')
+  const file = q.server_checked ? pdfs.get(doc.id) : undefined
+  if (q.server_checked) {
+    if (!file) fail(409, 'Upload this PDF again: in hybrid mode the file is only kept until the page reloads.')
+    const p = db.packs.find((x) => x.id === q.pack_id)!
+    const [next] = await questionsFromPdf(realFetch, file!, 1, p.level)
+    refresh(db)
+    const fresh = db.questions.find((x) => x.id === q.id) ?? fail(404, 'Question not found.')
+    Object.assign(fresh, { ...next, type: q.type })
+    return questionOut(fresh)
+  }
   await new Promise((r) => setTimeout(r, 1200))
   const used = new Set(db.questions.filter((x) => x.pack_id === q.pack_id).map((x) => x.source_quote))
   const pool = doc.text === POLICY_TEXT ? POLICY_QUESTIONS : sentencesOf(doc.text).map((s, i) => questionFromSentence(s, i, 'Uploaded document'))
@@ -382,7 +429,7 @@ const assignedPacks = (db: Db, u: UserRow) =>
     .filter((x): x is { a: AssignmentRow; p: PackRow } => !!x.p)
     .sort((x, y) => x.a.due_date.localeCompare(y.a.due_date))
 
-route('GET', '/play/rounds', ({ db, query }) => {
+route('GET', '/play/rounds', async ({ db, query }) => {
   const u = getUser(db, query.get('user_id'))
   const eta = Math.max(5, Math.min(60, Number(query.get('eta')) || 10))
   const count = Math.max(1, Math.min(12, Math.floor(eta / 2.5)))
@@ -403,26 +450,79 @@ route('GET', '/play/rounds', ({ db, query }) => {
       if (rounds.length >= count) break
       if (!rounds.some((r) => r.id === q.id)) rounds.push(toRound(q, p, 'assigned', a.due_date))
     }
+  const assignedOut = () =>
+    assigned.map(({ a, p }) => {
+      const qs = db.questions.filter((q) => q.pack_id === p.id && q.verified)
+      return { pack_id: p.id, title: p.title, due_date: a.due_date, total: qs.length, done: qs.filter((q) => seen.has(q.id)).length }
+    })
+
+  // Hybrid: today's news round comes from the real backend, one quiz per round
+  const needed = Math.min(MAX_BACKEND_NEWS, count - rounds.length)
+  if (hybrid && needed > 0 && query.get('preview') !== '1') {
+    try {
+      const fresh = await newsQuestions(realFetch, byId[u.profession]?.name ?? 'Office professional', u.level, needed)
+      refresh(db)
+      const key = `live:${u.profession}`
+      let pack = db.packs.find((p) => p.kind === 'news' && p.profession === key)
+      if (!pack) {
+        pack = { id: db.nextId++, company_id: COMPANY.id, document_id: null, title: 'Today’s news round', profession: key, level: u.level, status: 'approved', kind: 'news', created_at: new Date().toISOString() }
+        db.packs.push(pack)
+      }
+      for (const n of fresh) {
+        const row: QuestionRow = {
+          id: db.nextId++,
+          pack_id: pack.id,
+          type: 'decide',
+          scenario: n.topic ? `Topic: ${n.topic}.` : '',
+          question: n.question,
+          options: n.options,
+          best: -1,
+          second_best: null,
+          why: '',
+          source_quote: '',
+          source_location: n.sources[0]?.title ?? 'Written by Claude for your profession',
+          source_url: n.sources[0]?.url,
+          open_question: null,
+          verified: true,
+          quiz_id: n.quiz_id,
+          backend_question_id: n.question_id,
+        }
+        db.questions.push(row)
+        rounds.push(toRound(row, pack, 'news', null))
+      }
+      return { rounds, assigned: assignedOut() }
+    } catch (e) {
+      console.warn('Backend news rounds failed; using the sample news rounds instead.', e)
+    }
+  }
+
   const news = db.packs.find((p) => p.kind === 'news' && p.profession === u.profession) ?? db.packs.find((p) => p.kind === 'news' && p.profession === 'all')!
   for (const q of db.questions.filter((x) => x.pack_id === news.id && !seen.has(x.id))) {
     if (rounds.length >= count) break
     rounds.push(toRound(q, news, 'news', null))
   }
-  return {
-    rounds,
-    assigned: assigned.map(({ a, p }) => {
-      const qs = db.questions.filter((q) => q.pack_id === p.id && q.verified)
-      return { pack_id: p.id, title: p.title, due_date: a.due_date, total: qs.length, done: qs.filter((q) => seen.has(q.id)).length }
-    }),
-  }
+  return { rounds, assigned: assignedOut() }
 })
 
-route('POST', '/play/answer', ({ db, body }) => {
+
+route('POST', '/play/answer', async ({ db, body }) => {
   const b = body as { user_id: number; question_id: number; chosen: number; open_text?: string }
+  let q = db.questions.find((x) => x.id === Number(b.question_id)) ?? fail(404, 'Question not found.')
+  if (!Number.isInteger(b.chosen) || b.chosen < 0 || b.chosen >= q.options.length) fail(400, `chosen must be 0 to ${q.options.length - 1}.`)
+  // Hybrid news round: the backend grades it and only then reveals the answer
+  if (q.quiz_id && q.best < 0) {
+    // The quiz can only be submitted once, so the first answer fetches the key for the whole ride
+    const key = await gradeNews(realFetch, q.quiz_id, q.backend_question_id!, b.chosen)
+    refresh(db)
+    for (const row of db.questions.filter((x) => x.quiz_id === q.quiz_id)) {
+      const k = key.results.get(row.backend_question_id!)
+      if (k) Object.assign(row, { best: k.best, why: k.why })
+      if (key.sources[0]) Object.assign(row, { source_url: key.sources[0].url, source_location: key.sources[0].title })
+    }
+    q = db.questions.find((x) => x.id === Number(b.question_id)) ?? fail(404, 'Question not found.')
+  }
   const u = getUser(db, b.user_id)
-  const q = db.questions.find((x) => x.id === Number(b.question_id)) ?? fail(404, 'Question not found.')
   const p = db.packs.find((x) => x.id === q.pack_id)!
-  if (![0, 1, 2].includes(b.chosen)) fail(400, 'chosen must be 0, 1 or 2.')
   const repeat = db.answers.some((a) => a.user_id === u.id && a.question_id === q.id)
   const correct = b.chosen === q.best
   const secondPick = !correct && q.second_best !== null && b.chosen === q.second_best
@@ -581,11 +681,31 @@ route('GET', '/dashboard', ({ db }) => {
 })
 
 // ---------- fetch interceptor ----------
-export function installMock() {
-  const realFetch = window.fetch.bind(window)
+export function installMock({ hybrid: useBackend = false }: { hybrid?: boolean } = {}) {
+  realFetch = window.fetch.bind(window)
+  hybrid = useBackend
+  // StrictMode runs effects twice in dev; share one in-flight rounds request so the backend isn't asked twice
+  const inflight = new Map<string, Promise<{ status: number; text: string }>>()
+  const handle = mockFetch
   window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url, location.origin)
     if (!url.pathname.startsWith('/api/')) return realFetch(input, init)
+    if (!url.pathname.startsWith('/api/play/rounds')) return handle(url, init)
+    const key = url.pathname + url.search
+    let p = inflight.get(key)
+    if (!p) {
+      p = handle(url, init).then(async (r) => ({ status: r.status, text: await r.text() }))
+      inflight.set(key, p)
+      p.finally(() => setTimeout(() => inflight.delete(key), 1000))
+    }
+    const { status, text } = await p
+    return new Response(text, { status, headers: { 'Content-Type': 'application/json' } })
+  }
+  console.info(`%cUpshift mock API on${hybrid ? ' (hybrid: PDF questions and news rounds use the real backend)' : ''}`, 'font-weight:bold', '— reset with localStorage.removeItem("upshift.mock.v1")')
+}
+
+async function mockFetch(url: URL, init?: RequestInit): Promise<Response> {
+  {
     const method = (init?.method ?? 'GET').toUpperCase()
     const match = routes.find(([m, re]) => m === method && re.test(url.pathname))
     await new Promise((r) => setTimeout(r, 200 + Math.random() * 300))
@@ -599,10 +719,9 @@ export function installMock() {
       save(db)
       return data === null ? new Response(null, { status: 204 }) : json(200, data)
     } catch (e) {
-      if (e instanceof MockError) return json(e.status, { message: e.message })
+      if (e instanceof MockError || e instanceof BackendError) return json(e.status, { message: e.message })
       console.error(e)
-      return json(500, { message: 'Mock server error' })
+      return json(500, { message: hybrid ? `Couldn’t reach upshift-backend: ${(e as Error).message}` : 'Mock server error' })
     }
   }
-  console.info('%cUpshift mock API on', 'font-weight:bold', '— reset with localStorage.removeItem("upshift.mock.v1")')
 }

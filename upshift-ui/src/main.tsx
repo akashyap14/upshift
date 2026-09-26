@@ -13,9 +13,10 @@ const AppRoot = lazy(() => import('./app/AppRoot'))
 const AdminRoot = lazy(() => import('./admin/AdminRoot'))
 
 async function start() {
-  if (import.meta.env.VITE_MOCK === '1') {
+  // VITE_MOCK=1: everything mocked. VITE_MOCK=hybrid: PDF questions and news rounds use the real backend.
+  if (import.meta.env.VITE_MOCK === '1' || import.meta.env.VITE_MOCK === 'hybrid') {
     const { installMock } = await import('./api/mock/server')
-    installMock()
+    installMock({ hybrid: import.meta.env.VITE_MOCK === 'hybrid' })
   }
 
   const queryClient = new QueryClient({

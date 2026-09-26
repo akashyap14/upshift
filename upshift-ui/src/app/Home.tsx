@@ -20,7 +20,7 @@ export function Home() {
   const rounds = roundsForEta(eta)
 
   // Summary of what's waiting: assigned packs and whether news rounds remain
-  const home = useQuery({ queryKey: ['play-home', user!.id], queryFn: () => api.rounds(user!.id, 60), refetchOnMount: 'always' })
+  const home = useQuery({ queryKey: ['play-home', user!.id], queryFn: () => api.rounds(user!.id, 60, true), refetchOnMount: 'always' })
   const assigned = home.data?.assigned ?? []
   const newsLeft = home.data?.rounds.filter((r) => r.pack.kind === 'news').length ?? 0
   const assignedLeft = assigned.reduce((s, a) => s + (a.total - a.done), 0)

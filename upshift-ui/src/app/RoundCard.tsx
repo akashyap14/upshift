@@ -9,7 +9,8 @@ import { canListen, parseChoice, speak, stopSpeaking, useHoldToTalk } from '../l
 import { reducedMotion } from '../lib/theme'
 import { useApp } from './context'
 
-const KEYS = ['A', 'B', 'C']
+// Company packs have three options; backend news rounds can have four
+const KEYS = ['A', 'B', 'C', 'D']
 const RUBRIC_LABELS = [
   ['task_fit', 'Right task for AI'],
   ['context', 'Gave it context'],
@@ -90,11 +91,12 @@ export function RoundCard({ round, index, total, userId, level, onAnswered, onNe
   const pick = useCallback(
     (k: number) => {
       if (phase !== 'choose' && phase !== 'open') return
+      if (k < 0 || k >= round.options.length) return
       setPicked(k)
       if (hasOpen) setPhase('open')
       else submit(k)
     },
-    [phase, hasOpen, submit],
+    [phase, hasOpen, submit, round.options.length],
   )
 
   // Voice: in choose mode "A/B/C", in open mode the transcript becomes the answer
@@ -110,7 +112,7 @@ export function RoundCard({ round, index, total, userId, level, onAnswered, onNe
   )
   const mic = useHoldToTalk(onSpoken)
 
-  // Keyboard: A, B or C picks an option (not while typing)
+  // Keyboard: A, B, C (or D) picks an option (not while typing)
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLTextAreaElement || e.target instanceof HTMLInputElement || e.metaKey || e.ctrlKey) return
@@ -123,6 +125,8 @@ export function RoundCard({ round, index, total, userId, level, onAnswered, onNe
 
   const bestK = result ? round.options.findIndex((o) => o.index === result.best) : -1
   const secondK = result && result.second_best !== null ? round.options.findIndex((o) => o.index === result.second_best) : -1
+  // "A, B or C", or "A, B, C or D" for four-option rounds
+  const letters = `${KEYS.slice(0, round.options.length - 1).join(', ')} or ${KEYS[round.options.length - 1]}`
   const hint = mic.error
     ? mic.error
     : mic.listening
@@ -130,17 +134,17 @@ export function RoundCard({ round, index, total, userId, level, onAnswered, onNe
       : !canListen()
         ? phase === 'open'
           ? 'Type your answer.'
-          : 'Tap an answer, or press A, B or C.'
+          : `Tap an answer, or press ${letters}.`
         : phase === 'open'
           ? 'Hold the mic and say how you’d do it, or type.'
-          : 'Hold the mic and say A, B or C, or tap.'
+          : `Hold the mic and say ${letters}, or tap.`
 
   const Mic = (
     <div className={mic.listening ? 'talk on' : 'talk'}>
       <button
         className="mic"
         type="button"
-        aria-label={phase === 'open' ? 'Hold to answer by voice' : 'Hold and say A, B or C'}
+        aria-label={phase === 'open' ? 'Hold to answer by voice' : `Hold and say ${letters}`}
         aria-pressed={mic.listening}
         disabled={phase === 'sending'}
         onPointerDown={(e) => {

@@ -81,7 +81,9 @@ export const api = {
   assign: (body: { pack_id: number; team: string; due_date: string }) => call<Assignment>('POST', '/assignments', body),
 
   // Play
-  rounds: (user_id: number, eta: number) => call<RoundsResponse>('GET', `/play/rounds${q({ user_id, eta })}`),
+  /** preview: read-only look for the home screen (the server shouldn't create or reserve rounds) */
+  rounds: (user_id: number, eta: number, preview = false) =>
+    call<RoundsResponse>('GET', `/play/rounds${q(preview ? { user_id, eta, preview: 1 } : { user_id, eta })}`),
   answer: (body: AnswerRequest) => call<AnswerResponse>('POST', '/play/answer', body),
   finish: (body: FinishRequest) => call<FinishResponse>('POST', '/play/finish', body),
 
