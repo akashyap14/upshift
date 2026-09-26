@@ -79,6 +79,36 @@ public class QuestionService {
 
         String userPrompt = "<profession>%s</profession>%nNumber of questions: %d%nDifficulty: %s".formatted(
                 profession.replace("<", "").replace(">", ""), count, difficulty);
+        // One retry if the model's output is unusable (bad JSON or no valid MCQs); the second failure is returned.
+        List<AiQuestion> usable = askForMcqsWithRetry(profession, userPrompt, count);
+        if (usable.size() < count) {
+            LOG.warnf("Requested %d questions for '%s' but got %d valid MCQs", count, profession, usable.size());
+        }
+
+        // Renumber so ids are always 1..n regardless of what the model returned.
+        List<StoredQuestion> stored = IntStream.range(0, usable.size())
+                .mapToObj(i -> toStoredQuestion(i + 1, usable.get(i), difficulty))
+                .toList();
+        Quiz quiz = store.save(profession, stored);
+
+        List<Question> questions = stored.stream().map(StoredQuestion::question).toList();
+        return new GenerateResponse(quiz.id(), profession, questions.size(), quiz.expiresAt(), questions);
+    }
+
+    private List<AiQuestion> askForMcqsWithRetry(String profession, String userPrompt, int count) {
+        try {
+            return askForMcqs(profession, userPrompt, count);
+        } catch (UpstreamException e) {
+            if (e.status() != 502) {
+                throw e; // unreachable / rate-limited / timed out: retrying immediately won't help
+            }
+            LOG.warnf("Retrying question generation for '%s' after: %s", profession, e.getMessage());
+            return askForMcqs(profession, userPrompt, count);
+        }
+    }
+
+    /** Asks the AI for MCQs and returns the valid ones; throws 502 if there are none. */
+    private List<AiQuestion> askForMcqs(String profession, String userPrompt, int count) {
         AiGenerateResult result = ai.askForJson(GENERATE_SYSTEM_PROMPT, userPrompt, AiGenerateResult.class);
 
         if ("INVALID_PROFESSION".equals(result.error())) {
@@ -96,18 +126,7 @@ public class QuestionService {
             LOG.errorf("AI returned no usable questions for '%s': %s", profession, result);
             throw new UpstreamException(502, "The AI service did not return any questions. Please try again.", null);
         }
-        if (usable.size() < count) {
-            LOG.warnf("Requested %d questions for '%s' but got %d valid MCQs", count, profession, usable.size());
-        }
-
-        // Renumber so ids are always 1..n regardless of what the model returned.
-        List<StoredQuestion> stored = IntStream.range(0, usable.size())
-                .mapToObj(i -> toStoredQuestion(i + 1, usable.get(i), difficulty))
-                .toList();
-        Quiz quiz = store.save(profession, stored);
-
-        List<Question> questions = stored.stream().map(StoredQuestion::question).toList();
-        return new GenerateResponse(quiz.id(), profession, questions.size(), quiz.expiresAt(), questions);
+        return usable;
     }
 
     public EvaluateResponse evaluate(EvaluateRequest request) {

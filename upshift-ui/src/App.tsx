@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Bloom, type BloomHandle } from './components/Bloom'
 import { Road } from './components/Road'
 import { Sky } from './components/Sky'
-import { LEVEL_NAME, MOTION_SPEED, byId, professionForTrack } from './lib/professions'
+import { LEVEL_NAME, MOTION_SPEED, byId } from './lib/professions'
 import { applyProfessionTheme, reducedMotion } from './lib/theme'
 import { canSpeak, stopSpeaking, unlockSpeech } from './lib/speech'
 import { GearCard } from './screens/GearCard'
@@ -130,7 +130,6 @@ export default function App() {
         {screen === 'card' && ride && (
           <GearCard
             prof={prof}
-            profession={professionForTrack(prof, values.track)}
             level={values.level}
             eta={values.eta}
             ride={ride}

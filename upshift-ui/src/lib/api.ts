@@ -1,37 +1,51 @@
 // Client for upshift-backend (see upshift-backend/README.md)
 
+export type OptionId = 'A' | 'B' | 'C' | 'D'
+
+export interface Option {
+  id: OptionId
+  text: string
+}
+
+// A multiple-choice round. The correct answer stays on the server until the quiz is submitted.
 export interface Question {
   id: number
   question: string
+  options: Option[]
   topic: string
   difficulty: string
 }
 
 export interface GenerateResponse {
+  quizId: string
   profession: string
+  count: number
+  expiresAt: string
   questions: Question[]
 }
 
-export interface AnsweredQuestion {
-  id: number
-  question: string
-  answer: string
+export interface SelectedAnswer {
+  questionId: number
+  selectedOption: OptionId
 }
 
 export interface QuestionResult {
-  id: number
+  questionId: number
   question: string
-  score: number
-  feedback: string
-  idealAnswer: string
+  options: Option[]
+  selectedOption: OptionId | null
+  correctAnswer: OptionId
+  correct: boolean
+  explanation: string
 }
 
 export interface EvaluateResponse {
+  quizId: string
   profession: string
-  overallScore: number
-  summary: string
-  strengths: string[]
-  improvements: string[]
+  totalQuestions: number
+  answered: number
+  correct: number
+  scorePercent: number
   results: QuestionResult[]
 }
 
@@ -57,7 +71,10 @@ async function post<T>(path: string, body: unknown, signal?: AbortSignal): Promi
     } catch {
       // body wasn't JSON
     }
-    if (res.status === 502) throw new Error('The coach is busy right now. Try again in a moment.')
+    // 502/503/504: the AI behind the coach failed or is busy; the backend's message is for developers.
+    if (res.status === 502 || res.status === 503 || res.status === 504) {
+      throw new Error('The coach is busy right now. Try again in a moment.')
+    }
     throw new Error(message || `Something went wrong (${res.status}).`)
   }
   return res.json() as Promise<T>
@@ -70,6 +87,7 @@ export function generateQuestions(
   return post<GenerateResponse>('/api/questions/generate', req, signal)
 }
 
-export function evaluateAnswers(req: { profession: string; answers: AnsweredQuestion[] }, signal?: AbortSignal) {
+// One submission per quiz: the server grades it and only then reveals the answers.
+export function evaluateAnswers(req: { quizId: string; answers: SelectedAnswer[] }, signal?: AbortSignal) {
   return post<EvaluateResponse>('/api/questions/evaluate', req, signal)
 }

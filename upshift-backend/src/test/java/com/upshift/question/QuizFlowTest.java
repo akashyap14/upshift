@@ -1,6 +1,7 @@
 package com.upshift.question;
 
 import com.upshift.ai.AiService;
+import com.upshift.common.UpstreamException;
 import com.upshift.question.QuestionModels.AiGenerateResult;
 import com.upshift.question.QuestionModels.AiQuestion;
 import io.quarkus.test.junit.QuarkusMock;
@@ -10,9 +11,12 @@ import io.restassured.path.json.JsonPath;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.util.ArrayDeque;
+import java.util.Deque;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static io.restassured.RestAssured.given;
 import static org.hamcrest.Matchers.containsString;
@@ -48,17 +52,27 @@ class QuizFlowTest {
                     "Git tracks changes.", "Tools", "medium")));
 
     static AiGenerateResult nextResult = GOOD;
+    /** Scripted replies consumed first: an AiGenerateResult to return or a RuntimeException to throw. */
+    static final Deque<Object> script = new ArrayDeque<>();
+    static final AtomicInteger calls = new AtomicInteger();
 
     static class FakeAi extends AiService {
         @Override
         public <T> T askForJson(String systemPrompt, String userPrompt, Class<T> type) {
-            return type.cast(nextResult);
+            calls.incrementAndGet();
+            Object next = script.isEmpty() ? nextResult : script.poll();
+            if (next instanceof RuntimeException e) {
+                throw e;
+            }
+            return type.cast(next);
         }
     }
 
     @BeforeEach
     void installFakeAi() {
         nextResult = GOOD;
+        script.clear();
+        calls.set(0);
         QuarkusMock.installMockForType(new FakeAi(), AiService.class);
     }
 
@@ -243,5 +257,34 @@ class QuizFlowTest {
         given().contentType(ContentType.JSON).body("{\"profession\":\"Chef\"}")
                 .when().post("/api/questions/generate")
                 .then().statusCode(502).body("message", not(containsString("index")));
+    }
+
+    @Test
+    void retriesOnceWhenAiOutputIsUnusable() {
+        script.add(new UpstreamException(502, "The AI service returned an unexpected response.", null));
+        given().contentType(ContentType.JSON).body("{\"profession\":\"Chef\"}")
+                .when().post("/api/questions/generate")
+                .then().statusCode(200).body("count", is(3));
+        assertEquals(2, calls.get());
+    }
+
+    @Test
+    void givesUpAfterSecondUnusableReply() {
+        AiGenerateResult empty = new AiGenerateResult(null, null, List.of());
+        script.add(empty);
+        script.add(empty);
+        given().contentType(ContentType.JSON).body("{\"profession\":\"Chef\"}")
+                .when().post("/api/questions/generate")
+                .then().statusCode(502);
+        assertEquals(2, calls.get());
+    }
+
+    @Test
+    void doesNotRetryWhenAiIsUnavailable() {
+        script.add(new UpstreamException(503, "The AI service is busy right now.", null));
+        given().contentType(ContentType.JSON).body("{\"profession\":\"Chef\"}")
+                .when().post("/api/questions/generate")
+                .then().statusCode(503);
+        assertEquals(1, calls.get());
     }
 }

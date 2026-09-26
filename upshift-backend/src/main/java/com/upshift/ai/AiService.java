@@ -14,6 +14,8 @@ import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.eclipse.microprofile.rest.client.inject.RestClient;
 import org.jboss.logging.Logger;
 
+import java.util.ArrayDeque;
+import java.util.Deque;
 import java.util.List;
 import java.util.concurrent.TimeoutException;
 import java.util.stream.Collectors;
@@ -80,9 +82,60 @@ public class AiService {
         try {
             return mapper.readValue(content, type);
         } catch (JsonProcessingException e) {
+            // The model occasionally drops the final closing brace(s); try once more with them restored.
+            String repaired = closeUnbalancedJson(content);
+            if (!repaired.equals(content)) {
+                try {
+                    T value = mapper.readValue(repaired, type);
+                    LOG.warn("Repaired AI response with missing closing brackets");
+                    return value;
+                } catch (JsonProcessingException ignored) {
+                    // fall through to the error below
+                }
+            }
             LOG.errorf("Could not parse AI response as %s: %s", type.getSimpleName(), content);
             throw new UpstreamException(502, "The AI service returned an unexpected response. Please try again.", e);
         }
+    }
+
+    /** Appends any closing brackets/braces left open at the end of {@code json} (ignoring ones inside strings). */
+    static String closeUnbalancedJson(String json) {
+        Deque<Character> open = new ArrayDeque<>();
+        boolean inString = false;
+        boolean escaped = false;
+        for (int i = 0; i < json.length(); i++) {
+            char c = json.charAt(i);
+            if (inString) {
+                if (escaped) {
+                    escaped = false;
+                } else if (c == '\\') {
+                    escaped = true;
+                } else if (c == '"') {
+                    inString = false;
+                }
+                continue;
+            }
+            switch (c) {
+                case '"' -> inString = true;
+                case '{' -> open.push('}');
+                case '[' -> open.push(']');
+                case '}', ']' -> {
+                    if (open.isEmpty() || open.pop() != c) {
+                        return json; // mismatched, not a simple truncation; leave it alone
+                    }
+                }
+                default -> {
+                }
+            }
+        }
+        if (inString || open.isEmpty()) {
+            return json;
+        }
+        StringBuilder sb = new StringBuilder(json);
+        while (!open.isEmpty()) {
+            sb.append(open.pop());
+        }
+        return sb.toString();
     }
 
     private static UpstreamException fromUpstreamStatus(int status, Throwable cause) {

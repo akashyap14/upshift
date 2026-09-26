@@ -1,11 +1,9 @@
-import { useEffect, useState } from 'react'
-import { evaluateAnswers, type EvaluateResponse } from '../lib/api'
-import { LEVEL_NAME, type Level, type Profession } from '../lib/professions'
+import type { Option, OptionId } from '../lib/api'
+import { COACH_TONE, LEVEL_NAME, type Level, type Profession } from '../lib/professions'
 import type { RideResult } from './Round'
 
 interface Props {
   prof: Profession
-  profession: string
   level: Level
   eta: number
   ride: RideResult
@@ -13,35 +11,17 @@ interface Props {
   onChange(): void
 }
 
-export function GearCard({ prof, profession, level, eta, ride, onAgain, onChange }: Props) {
-  const [summary, setSummary] = useState<EvaluateResponse | null>(null)
-  const [summaryFailed, setSummaryFailed] = useState(false)
+function optionText(options: Option[], id: OptionId | null) {
+  return options.find((o) => o.id === id)?.text
+}
 
-  const score = ride.results.reduce((s, r) => s + r.score, 0)
-  const max = ride.results.length * 10
-  const best = [...ride.results].sort((a, b) => b.score - a.score)[0]
-  const weakest = [...ride.results].sort((a, b) => a.score - b.score)[0]
+export function GearCard({ prof, level, eta, ride, onAgain, onChange }: Props) {
+  const { correct, totalQuestions, scorePercent, results } = ride.evaluation
+  const tone = COACH_TONE[level]
+  const lead = scorePercent >= 80 ? tone.good : scorePercent >= 50 ? tone.ok : tone.low
 
-  // One summary pass over the whole ride for strengths and what to work on next
-  useEffect(() => {
-    const ctrl = new AbortController()
-    evaluateAnswers(
-      {
-        profession,
-        answers: ride.questions.map((q, i) => ({ id: q.id, question: q.question, answer: ride.answers[i] ?? '' })),
-      },
-      ctrl.signal,
-    )
-      .then(setSummary)
-      .catch((e: Error) => {
-        if (e.name !== 'AbortError') setSummaryFailed(true)
-      })
-    return () => ctrl.abort()
-  }, [profession, ride])
-
-  const loading = !summary && !summaryFailed
-  const insight = summary?.strengths?.[0] ?? best?.feedback
-  const move = summary?.improvements?.[0] ?? weakest?.idealAnswer
+  const best = results.find((r) => r.correct)
+  const weakest = results.find((r) => !r.correct)
   const date = new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
 
   return (
@@ -56,20 +36,51 @@ export function GearCard({ prof, profession, level, eta, ride, onAgain, onChange
           Gear Card · {LEVEL_NAME[level]} · {date}
         </div>
         <div className="score">
-          {score}
-          <small> / {max}</small>
+          {correct}
+          <small> / {totalQuestions}</small>
         </div>
         <div className="lab">{eta} minutes of traffic turned into practice</div>
-        {summary?.summary && <p className="summary">{summary.summary}</p>}
+        <p className="summary">
+          <b>{lead}</b> You got {scorePercent}% right.
+        </p>
         <div className="row">
           <b>Best insight</b>
-          {loading ? <span className="skel" /> : <span>{insight}</span>}
+          <span>{best ? best.explanation : 'Every round is a lesson. Check the answers below.'}</span>
         </div>
         <div className="row">
           <b>Tomorrow’s move</b>
-          {loading ? <span className="skel" /> : <span>{move}</span>}
+          <span>{weakest ? weakest.explanation : 'Clean sweep. Try the next level up.'}</span>
         </div>
       </div>
+
+      <div className="panel">
+        <span className="kind">Your rounds</span>
+        <ol className="review">
+          {results.map((r) => (
+            <li key={r.questionId} className={r.correct ? 'right' : 'wrong'}>
+              <p className="review-q">{r.question}</p>
+              <p className="review-a">
+                <span className="mark" aria-hidden="true">{r.correct ? '✓' : '✗'}</span>
+                {r.selectedOption ? (
+                  <>
+                    You picked <b>{r.selectedOption}</b>: {optionText(r.options, r.selectedOption)}
+                  </>
+                ) : (
+                  'Not answered'
+                )}
+                <span className="sr-only">{r.correct ? ' (correct)' : ' (incorrect)'}</span>
+              </p>
+              {!r.correct && (
+                <p className="review-a">
+                  Answer <b>{r.correctAnswer}</b>: {optionText(r.options, r.correctAnswer)}
+                </p>
+              )}
+              <p className="hint">{r.explanation}</p>
+            </li>
+          ))}
+        </ol>
+      </div>
+
       <button className="go" type="button" onClick={onAgain}>
         Ride again
       </button>
