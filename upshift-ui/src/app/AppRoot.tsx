@@ -31,6 +31,11 @@ export default function AppRoot() {
   const prof = byId[user?.profession ?? ''] ?? PROFESSIONS[0]
   const riding = location.pathname.startsWith('/app/ride')
 
+  // Each screen (and signing in) starts at the top
+  useEffect(() => {
+    scrollTo(0, 0)
+  }, [location.pathname, user?.id])
+
   // Tokens follow the player's profession and the phone's dark mode
   useEffect(() => {
     applyProfessionTheme(prof)

@@ -14,7 +14,7 @@ const GROUPS: { kind: RewardKind; title: string }[] = [
 ]
 
 export function Rewards() {
-  const { user, signIn } = useSession()
+  const { user, signIn, patchUser } = useSession()
   const { setRoad } = useApp()
   const rewards = useRewards(user!.id)
   const redeem = useRedeem()
@@ -30,6 +30,7 @@ export function Rewards() {
       const res = await redeem.mutateAsync({ rewardId: r.id, userId: user!.id })
       setConfirm(null)
       setCode(res)
+      patchUser({ points: res.balance })
       // Refresh the user: points changed, and a skill upgrade can change the level
       signIn(await api.login(user!.id))
     } catch {

@@ -114,7 +114,7 @@ export function GearCard({ played, eta, onBonus, onAgain }: Props) {
         )}
       </div>
 
-      <button className="go" type="button" onClick={onAgain}>
+      <button className="go go-sticky" type="button" onClick={onAgain}>
         Ride again
       </button>
       <Link className="link" to="/app/rewards">
