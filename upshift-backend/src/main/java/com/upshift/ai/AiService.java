@@ -15,6 +15,7 @@ import org.eclipse.microprofile.rest.client.inject.RestClient;
 import org.jboss.logging.Logger;
 
 import java.util.List;
+import java.util.concurrent.TimeoutException;
 import java.util.stream.Collectors;
 
 /** Sends a prompt to Claude and parses the JSON it returns. */
@@ -51,16 +52,21 @@ public class AiService {
         try {
             response = client.messages(apiKey, ANTHROPIC_VERSION, request);
         } catch (WebApplicationException e) {
+            int status = e.getResponse().getStatus();
             String body = e.getResponse().hasEntity() ? e.getResponse().readEntity(String.class) : "";
-            LOG.errorf("AI API returned %d: %s", e.getResponse().getStatus(), body);
-            throw new UpstreamException("AI API returned " + e.getResponse().getStatus() + ": " + body, e);
+            LOG.errorf("AI API returned %d: %s", status, body);
+            throw fromUpstreamStatus(status, e);
         } catch (Exception e) {
+            if (hasCause(e, TimeoutException.class)) {
+                LOG.error("AI API call timed out", e);
+                throw new UpstreamException(504, "The AI service took too long to respond. Please try again.", e);
+            }
             LOG.error("AI API call failed", e);
-            throw new UpstreamException("AI API call failed: " + e.getMessage(), e);
+            throw new UpstreamException(503, "Could not reach the AI service. Please try again later.", e);
         }
 
         if (response == null || response.content() == null || response.content().isEmpty()) {
-            throw new UpstreamException("AI API returned an empty response", null);
+            throw new UpstreamException(502, "The AI service returned an empty response. Please try again.", null);
         }
         if ("max_tokens".equals(response.stopReason())) {
             LOG.warn("AI response was truncated by max_tokens; consider raising upshift.ai.max-tokens");
@@ -75,8 +81,30 @@ public class AiService {
             return mapper.readValue(content, type);
         } catch (JsonProcessingException e) {
             LOG.errorf("Could not parse AI response as %s: %s", type.getSimpleName(), content);
-            throw new UpstreamException("AI API returned invalid JSON", e);
+            throw new UpstreamException(502, "The AI service returned an unexpected response. Please try again.", e);
         }
+    }
+
+    private static UpstreamException fromUpstreamStatus(int status, Throwable cause) {
+        return switch (status) {
+            case 401, 403 -> new UpstreamException(502,
+                    "The AI service rejected our credentials. Please contact support.", cause);
+            case 429 -> new UpstreamException(503,
+                    "The AI service is busy right now. Please try again in a moment.", cause);
+            case 500, 502, 503, 504, 529 -> new UpstreamException(503,
+                    "The AI service is temporarily unavailable. Please try again later.", cause);
+            default -> new UpstreamException(502,
+                    "The AI service could not process the request. Please try again.", cause);
+        };
+    }
+
+    private static boolean hasCause(Throwable e, Class<? extends Throwable> type) {
+        for (Throwable t = e; t != null; t = t.getCause()) {
+            if (type.isInstance(t) || t.getClass().getSimpleName().contains("Timeout")) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /** Models often wrap JSON in markdown code fences; remove them. */

@@ -35,7 +35,7 @@ Swagger UI: http://localhost:8080/q/swagger-ui
 
 Response:
 ```json
-{ "profession": "Software Engineer",
+{ "profession": "Software Engineer", "count": 5,
   "questions": [ { "id": 1, "question": "...", "topic": "...", "difficulty": "medium" } ] }
 ```
 
@@ -54,4 +54,23 @@ Response:
   "results": [ { "id": 1, "question": "...", "score": 7, "feedback": "...", "idealAnswer": "..." } ] }
 ```
 
-Errors: `400` for invalid input, `502` if the AI API fails or returns unparseable output.
+## Errors
+
+Every error returns the same JSON shape, so the UI can always show `message`:
+
+```json
+{ "status": 400, "error": "Bad Request", "message": "Invalid request",
+  "details": ["profession: must not be blank"] }
+```
+
+| Status | When |
+|--------|------|
+| `400`  | Missing/invalid fields (`details` lists each problem), malformed JSON, wrong field types |
+| `404` / `405` / `415` | Unknown endpoint, wrong HTTP method, Content-Type not `application/json` |
+| `422`  | Profession isn't a real job title (gibberish or prompt-injection attempts) |
+| `502`  | AI returned unusable output, or the API key was rejected |
+| `503`  | AI service unreachable, rate-limited or overloaded; safe to retry |
+| `504`  | AI service timed out; safe to retry |
+| `500`  | Unexpected server error |
+
+Upstream error details are logged server-side and never sent to the UI.

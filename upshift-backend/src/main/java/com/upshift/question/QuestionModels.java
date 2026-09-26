@@ -7,9 +7,11 @@ import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 
 import java.util.List;
+import java.util.Locale;
 
 public final class QuestionModels {
 
@@ -19,8 +21,9 @@ public final class QuestionModels {
     // ---- Endpoint 1: generate ----
 
     public record GenerateRequest(
-            @NotBlank @Size(max = 100) String profession,
+            @NotBlank @Size(min = 2, max = 100) String profession,
             @Min(1) @Max(20) Integer count,
+            @Pattern(regexp = "(?i)easy|medium|hard", message = "must be one of: easy, medium, hard")
             String difficulty) {
 
         public int countOrDefault() {
@@ -28,7 +31,7 @@ public final class QuestionModels {
         }
 
         public String difficultyOrDefault() {
-            return difficulty == null || difficulty.isBlank() ? "medium" : difficulty;
+            return difficulty == null ? "medium" : difficulty.toLowerCase(Locale.ROOT);
         }
     }
 
@@ -36,8 +39,12 @@ public final class QuestionModels {
     public record Question(int id, String question, String topic, String difficulty) {
     }
 
+    public record GenerateResponse(String profession, int count, List<Question> questions) {
+    }
+
+    /** Raw shape Claude returns; either questions, or an error when the profession is invalid. */
     @JsonIgnoreProperties(ignoreUnknown = true)
-    public record GenerateResponse(String profession, List<Question> questions) {
+    public record AiGenerateResult(String error, String reason, List<Question> questions) {
     }
 
     // ---- Endpoint 2: evaluate ----
