@@ -1,0 +1,328 @@
+/* ---------- Tokens (DESIGN.md §1, plus the new brand accents from upshift_1) ---------- */
+/* Light by default: calm, low-glare. Night palette follows the phone's dark mode. */
+:root {
+  --ground: #f5f6f8;
+  --surface: #ffffff;
+  --surface-2: #f0f1f5;
+  --surface-3: #e8eaf0;
+  --ink: #1e2230;
+  --ink-soft: #5e6475;
+  --hair: #e3e5ec;
+  --shadow: 0 10px 30px rgba(30, 34, 48, 0.08);
+  --shadow-sm: 0 2px 8px rgba(30, 34, 48, 0.06);
+  /* per profession, set from JS */
+  --tint: #bdebd9;
+  --tint-2: #c9e2ff;
+  --deep: #0e6b52;
+  --deep-ink: #ffffff;
+  /* brand + status */
+  --brand: #66ab34;
+  --sun: #ffd35c;
+  --good: #1f7a4d;
+  --good-bg: #ddf3e6;
+  --bad: #b0303a;
+  --bad-bg: #fbe1e3;
+  --warn-ink: #7a5200;
+  --warn-bg: #fff1cc;
+  --display: 'Gabarito', 'Trebuchet MS', sans-serif;
+  --body: 'Nunito Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+    --ground: #14161b;
+    --surface: #1d2027;
+    --surface-2: #262a33;
+    --surface-3: #30343f;
+    --ink: #eceef3;
+    --ink-soft: #a3a9b8;
+    --hair: #30343f;
+    --shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+    --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.3);
+    /* --deep is lightened at night, so text on it goes dark to keep contrast */
+    --deep-ink: #14161b;
+    --good: #6fd09a;
+    --good-bg: #1d3a2b;
+    --bad: #ff8f97;
+    --bad-bg: #43232a;
+    --warn-ink: #ffd98a;
+    --warn-bg: #3d3320;
+  }
+}
+
+/* ---------- Base shared by /app and /admin ---------- */
+* {
+  box-sizing: border-box;
+}
+html,
+body,
+#root {
+  min-height: 100%;
+}
+body {
+  margin: 0;
+  background: var(--ground);
+  color: var(--ink);
+  font-family: var(--body);
+  font-size: 16px;
+  line-height: 1.5;
+  -webkit-tap-highlight-color: transparent;
+}
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+button {
+  cursor: pointer;
+}
+:focus-visible {
+  outline: 3px solid var(--deep);
+  outline-offset: 2px;
+}
+h1,
+h2,
+h3 {
+  font-family: var(--display);
+  margin: 0;
+  letter-spacing: -0.01em;
+}
+.muted {
+  color: var(--ink-soft);
+}
+.num {
+  font-variant-numeric: tabular-nums;
+}
+.grow {
+  flex: 1;
+  min-width: 0;
+}
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+.hint {
+  margin: 0;
+  font-size: 13px;
+  color: var(--ink-soft);
+}
+
+/* Brand */
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.wordmark {
+  font-family: var(--display);
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+.splash {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  background: #101318;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+.splash-tag {
+  margin: 0;
+  color: #b9c0cc;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+/* Points pill: yellow with a comic offset shadow */
+.pts {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--display);
+  font-weight: 800;
+  padding: 5px 12px;
+  border-radius: 999px;
+  background: var(--sun);
+  color: #1e2230;
+  border: 2px solid #1e2230;
+  box-shadow: 2px 2px 0 #1e2230;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Alerts: colour is always paired with words */
+.alert {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 12px;
+  font-weight: 700;
+  font-size: 14px;
+}
+.alert.bad {
+  background: var(--bad-bg);
+  color: var(--bad);
+}
+.alert.good {
+  background: var(--good-bg);
+  color: var(--good);
+}
+.alert.warn {
+  background: var(--warn-bg);
+  color: var(--warn-ink);
+}
+
+/* Segmented control */
+.seg {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  background: var(--surface-3);
+  border-radius: 999px;
+}
+.seg button {
+  flex: 1;
+  min-height: 40px;
+  border: 0;
+  background: transparent;
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-weight: 700;
+}
+.seg button[aria-pressed='true'] {
+  background: var(--ink);
+  color: var(--ground);
+}
+
+/* Demo login */
+.demo-login {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.people {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.people button {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 58px;
+  padding: 8px 12px 8px 8px;
+  border-radius: 16px;
+  border: 1.5px solid var(--hair);
+  background: var(--surface);
+  text-align: left;
+}
+.people button:hover:not(:disabled) {
+  border-color: var(--ink-soft);
+}
+.people b {
+  display: block;
+}
+.people small {
+  display: block;
+  color: var(--ink-soft);
+  font-size: 13px;
+}
+.people .chev {
+  font-size: 24px;
+  color: var(--ink-soft);
+}
+.avatar {
+  flex: none;
+  width: 40px;
+  height: 40px;
+  border-radius: 13px;
+  display: grid;
+  place-items: center;
+  font-family: var(--display);
+  font-weight: 800;
+  font-size: 14px;
+  color: #1e2230;
+}
+
+.spin {
+  width: 18px;
+  height: 18px;
+  flex: none;
+  display: inline-block;
+  border-radius: 50%;
+  border: 2.5px solid currentColor;
+  border-right-color: transparent;
+  animation: spin 0.8s linear infinite;
+}
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Landing */
+.landing {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  padding: 24px 16px;
+  text-align: center;
+}
+.landing-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 16px;
+  width: 100%;
+  max-width: 760px;
+}
+.landing-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  align-items: flex-start;
+  text-align: left;
+  padding: 22px;
+  border-radius: 24px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  color: inherit;
+  text-decoration: none;
+  transition: transform 0.2s;
+}
+.landing-card:hover {
+  transform: translateY(-3px);
+}
+.landing-card p {
+  margin: 0;
+}
+.landing-card .cta {
+  margin-top: auto;
+  font-family: var(--display);
+  font-weight: 700;
+  color: var(--deep);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

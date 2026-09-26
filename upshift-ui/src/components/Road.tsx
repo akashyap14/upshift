@@ -22,14 +22,16 @@ export function Road({ eta, target }: { eta: number; target: number }) {
       const dt = Math.min(50, now - prev) / 16.67
       prev = now
       progress.current += (goal.current.target - progress.current) * 0.02 * dt
+      // The bar can unmount between frames (leaving a ride); stop quietly
+      if (!fill.current || !car.current || !etaText.current || !sigText.current) return
       const pr = progress.current
       const col = pr < 0.4 ? '#E8963A' : pr < 0.85 ? '#D8B533' : '#3FA96A'
-      fill.current!.style.width = `${pr * 100}%`
-      fill.current!.style.background = col
-      car.current!.style.left = `${pr * 100}%`
-      car.current!.style.color = col
-      etaText.current!.textContent = `${Math.max(0, Math.round(goal.current.eta * (1 - pr)))} min to go`
-      sigText.current!.textContent = pr < 0.4 ? 'Heavy traffic' : pr < 0.85 ? 'Moving' : 'Almost there'
+      fill.current.style.width = `${pr * 100}%`
+      fill.current.style.background = col
+      car.current.style.left = `${pr * 100}%`
+      car.current.style.color = col
+      etaText.current.textContent = `${Math.max(0, Math.round(goal.current.eta * (1 - pr)))} min to go`
+      sigText.current.textContent = pr < 0.4 ? 'Heavy traffic' : pr < 0.85 ? 'Moving' : 'Almost there'
       raf = requestAnimationFrame(frame)
     }
     raf = requestAnimationFrame(frame)

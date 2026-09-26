@@ -110,6 +110,21 @@ export function useHoldToTalk(onFinal: (text: string) => void) {
   return { listening, interim, error, start, stop }
 }
 
+// Map a spoken answer to option 0/1/2: "A", "option B", "second", "three", "see"…
+const CHOICE_WORDS: Record<string, number> = {
+  a: 0, ay: 0, eh: 0, one: 0, '1': 0, first: 0,
+  b: 1, be: 1, bee: 1, two: 1, '2': 1, second: 1,
+  c: 2, see: 2, sea: 2, three: 2, '3': 2, third: 2,
+}
+export function parseChoice(text: string): number | null {
+  const words = text.toLowerCase().replace(/[^a-z0-9 ]/g, ' ').split(/\s+/).filter(Boolean)
+  // Prefer the word after "option"/"answer"/"pick", else the last recognised word
+  for (let i = 0; i < words.length - 1; i++)
+    if (['option', 'answer', 'pick', 'choice'].includes(words[i]) && words[i + 1] in CHOICE_WORDS) return CHOICE_WORDS[words[i + 1]]
+  for (let i = words.length - 1; i >= 0; i--) if (words[i] in CHOICE_WORDS) return CHOICE_WORDS[words[i]]
+  return null
+}
+
 export function speak(text: string, rate = 1) {
   if (!canSpeak() || !text) return
   speechSynthesis.cancel()

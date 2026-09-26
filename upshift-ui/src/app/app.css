@@ -1,0 +1,1020 @@
+/* Mobile player app (/app). Scoped under .m-app so it can't leak into /admin.
+   Tokens come from styles/tokens.css; look follows DESIGN.md and the prototype. */
+
+.m-app {
+  min-height: 100vh;
+  padding: 12px 16px calc(96px + env(safe-area-inset-bottom, 0px));
+  overflow-x: hidden;
+}
+.m-app canvas.sky,
+.m-app canvas.fx {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+.m-app canvas.sky {
+  z-index: 0;
+}
+.m-app canvas.fx {
+  z-index: 60;
+}
+.m-col {
+  position: relative;
+  z-index: 1;
+  max-width: 420px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+/* ---------- Top bar ---------- */
+.m-app .bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 46px;
+}
+.m-app .bar-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.m-app .voice-toggle {
+  width: 46px;
+  height: 46px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ink-soft);
+}
+.m-app .voice-toggle[aria-pressed='true'] {
+  color: var(--deep);
+}
+
+/* ---------- Tabs ---------- */
+.m-app .tabs {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 20;
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  padding: 8px 16px calc(8px + env(safe-area-inset-bottom, 0px));
+  background: color-mix(in srgb, var(--surface) 88%, transparent);
+  backdrop-filter: blur(10px);
+  border-top: 1px solid var(--hair);
+}
+.m-app .tabs a {
+  flex: 1;
+  max-width: 200px;
+  min-height: 52px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  border-radius: 16px;
+  font-weight: 800;
+  font-size: 13px;
+  color: var(--ink-soft);
+  text-decoration: none;
+}
+.m-app .tabs a.active {
+  color: var(--ink);
+  background: var(--surface-2);
+}
+.m-app .tabs a.active svg {
+  color: var(--deep);
+}
+
+/* ---------- Screen & hero ---------- */
+.m-app .screen {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  animation: m-fade 0.45s ease;
+}
+@keyframes m-fade {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.m-app .hero {
+  padding-top: 6px;
+}
+.m-app .hello {
+  margin: 0;
+  font-size: 15px;
+  color: var(--ink-soft);
+  font-weight: 600;
+}
+.m-app .who {
+  margin: 2px 0 0;
+  font-family: var(--display);
+  font-weight: 800;
+  font-size: 44px;
+  line-height: 1.02;
+  letter-spacing: -0.025em;
+  text-wrap: balance;
+}
+.m-app .who.swap {
+  animation: m-swap 0.6s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+@keyframes m-swap {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.m-app .lede {
+  margin: 6px 0 0;
+  color: var(--ink-soft);
+  font-weight: 600;
+}
+
+/* ---------- Motif ---------- */
+.m-app .motif {
+  width: 100%;
+  height: 120px;
+  display: block;
+  margin-top: 6px;
+  overflow: visible;
+}
+.m-app .motif path {
+  fill: none;
+  stroke: var(--deep);
+  stroke-width: 2.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transition: stroke 0.8s;
+}
+.m-app .motif path.draw {
+  stroke-dasharray: var(--len);
+  stroke-dashoffset: var(--len);
+  animation: m-draw 5.5s ease-in-out infinite;
+}
+@keyframes m-draw {
+  0% {
+    stroke-dashoffset: var(--len);
+  }
+  45%,
+  70% {
+    stroke-dashoffset: 0;
+  }
+  100% {
+    stroke-dashoffset: calc(var(--len) * -1);
+  }
+}
+.m-app .motif .rider {
+  fill: var(--deep);
+}
+.m-app .motif path.soft {
+  stroke: var(--hair);
+  stroke-width: 1.5;
+}
+
+/* ---------- Panel & controls ---------- */
+.m-app .panel {
+  background: var(--surface);
+  border-radius: 26px;
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  box-shadow: var(--shadow);
+}
+.m-app .panel-title {
+  font-size: 18px;
+  font-weight: 700;
+}
+.m-app .lab {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink-soft);
+}
+.m-app .eta {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  font-variant-numeric: tabular-nums;
+}
+.m-app .eta b {
+  font-family: var(--display);
+  font-size: 30px;
+}
+.m-app .eta span {
+  color: var(--ink-soft);
+  font-weight: 600;
+}
+.m-app input[type='range'] {
+  width: 100%;
+  accent-color: var(--deep);
+  height: 28px;
+}
+.m-app .check {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  min-height: 46px;
+  font-size: 15px;
+  font-weight: 600;
+}
+.m-app .check input {
+  width: 22px;
+  height: 22px;
+  accent-color: var(--deep);
+}
+
+.m-app .go {
+  min-height: 58px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--deep);
+  color: var(--deep-ink);
+  font-family: var(--display);
+  font-size: 19px;
+  font-weight: 700;
+  text-decoration: none;
+  transition:
+    background-color 0.8s,
+    transform 0.15s,
+    opacity 0.3s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+.m-app .go:active {
+  transform: scale(0.98);
+}
+.m-app .go:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.m-app .go.small {
+  min-height: 48px;
+  font-size: 16px;
+}
+/* The round action stays reachable above the fixed road bar */
+.m-app .go-sticky {
+  position: sticky;
+  bottom: calc(66px + env(safe-area-inset-bottom, 0px));
+  z-index: 5;
+  box-shadow: var(--shadow);
+}
+.m-app .go-sticky:disabled {
+  opacity: 1;
+  background: color-mix(in srgb, var(--deep) 40%, var(--ground));
+}
+.m-app .link {
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  background: transparent;
+  font-weight: 700;
+  color: var(--ink-soft);
+  text-decoration: none;
+}
+.m-app .text-btn {
+  border: 0;
+  background: transparent;
+  padding: 6px 2px;
+  min-height: 36px;
+  font-weight: 700;
+  color: var(--deep);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.m-app .signed-in {
+  margin: 0;
+  text-align: center;
+  font-size: 13px;
+  color: var(--ink-soft);
+}
+
+.m-app .chip,
+.m-app .tag {
+  display: inline-flex;
+  align-items: center;
+  font-size: 12px;
+  font-weight: 800;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--ink);
+  white-space: nowrap;
+}
+.m-app .chip.warn {
+  align-self: flex-start;
+  background: var(--warn-bg);
+  color: var(--warn-ink);
+}
+.m-app .tag.good {
+  background: var(--good-bg);
+  color: var(--good);
+}
+.m-app .meter {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--hair);
+  overflow: hidden;
+}
+.m-app .meter i {
+  display: block;
+  height: 100%;
+  border-radius: 3px;
+  background: var(--deep);
+  transition: width 0.6s;
+}
+
+/* Home: assigned packs + news */
+.m-app .assigned {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.m-app .assigned li {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.m-app .assigned-top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.m-app .news-line {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding-top: 14px;
+  border-top: 1.5px solid var(--hair);
+}
+.m-app .news-line b,
+.m-app .news-line small {
+  display: block;
+}
+.m-app .news-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--deep);
+  box-shadow: 0 0 0 5px var(--tint);
+}
+
+/* ---------- Round ---------- */
+.m-app .round {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+.m-app .chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+.m-app .kind {
+  align-self: flex-start;
+  font-size: 13px;
+  font-weight: 800;
+  padding: 5px 12px;
+  border-radius: 999px;
+  background: var(--tint);
+  color: #1e2230;
+  transition: background-color 0.8s;
+}
+.m-app .scn {
+  margin: 0;
+  font-size: 18px;
+  line-height: 1.55;
+}
+.m-app .q {
+  margin: 0;
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: 26px;
+  line-height: 1.15;
+  letter-spacing: -0.01em;
+  text-wrap: balance;
+}
+.m-app .w {
+  display: inline-block;
+  opacity: 0;
+  animation: m-word 0.6s ease forwards;
+}
+@keyframes m-word {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.m-app .opts {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.m-app .opt {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  text-align: left;
+  min-height: 58px;
+  padding: 10px 14px 10px 10px;
+  border-radius: 20px;
+  border: 1.5px solid var(--hair);
+  background: var(--surface);
+  font-size: 16px;
+  font-weight: 600;
+  transition:
+    border-color 0.2s,
+    background-color 0.3s,
+    opacity 0.3s;
+}
+.m-app .opt:hover:not(:disabled) {
+  border-color: var(--ink-soft);
+}
+.m-app .opt:disabled {
+  cursor: default;
+}
+.m-app .opt .k {
+  flex: none;
+  width: 38px;
+  height: 38px;
+  border-radius: 13px;
+  display: grid;
+  place-items: center;
+  background: var(--surface-2);
+  font-family: var(--display);
+  font-weight: 800;
+}
+.m-app .opt .tx {
+  flex: 1;
+}
+.m-app .opt.picked {
+  border-color: var(--deep);
+  background: color-mix(in srgb, var(--tint) 45%, var(--surface));
+}
+.m-app .opt.picked .k {
+  background: var(--deep);
+  color: var(--deep-ink);
+}
+.m-app .opt.best {
+  background: var(--tint);
+  border-color: var(--deep);
+  color: #1e2230;
+}
+.m-app .opt.best .k {
+  background: var(--deep);
+  color: var(--deep-ink);
+}
+.m-app .opt.second {
+  border-style: dashed;
+  border-color: var(--ink-soft);
+}
+.m-app .opt.dim {
+  opacity: 0.45;
+}
+.m-app .opt .tag {
+  flex: none;
+  background: transparent;
+  color: var(--deep);
+  padding: 0;
+}
+.m-app .opt.best .tag {
+  color: #1e2230;
+}
+.m-app .opt .tag.soft {
+  color: var(--ink-soft);
+}
+
+/* Hold-to-talk */
+.m-app .talk {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 2px 4px;
+}
+.m-app .mic {
+  flex: none;
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  border: 0;
+  background: var(--deep);
+  color: var(--deep-ink);
+  display: grid;
+  place-items: center;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.m-app .mic:disabled {
+  opacity: 0.4;
+}
+.m-app .talk.on .mic {
+  animation: m-breathe 1.6s ease-in-out infinite;
+}
+@keyframes m-breathe {
+  50% {
+    box-shadow: 0 0 0 14px color-mix(in srgb, var(--deep) 18%, transparent);
+  }
+}
+.m-app .wave {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  height: 34px;
+}
+.m-app .wave i {
+  flex: 1;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--hair);
+}
+.m-app .talk.on .wave i {
+  background: var(--deep);
+  animation: m-wv 0.9s ease-in-out infinite alternate;
+}
+@keyframes m-wv {
+  to {
+    height: 100%;
+  }
+}
+
+/* Open answer (AI Move bonus) */
+.m-app .open {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px;
+  border-radius: 20px;
+  background: var(--surface-2);
+  animation: m-fade 0.35s ease;
+}
+.m-app .open-q {
+  margin: 0;
+  font-size: 15px;
+}
+.m-app .open textarea {
+  width: 100%;
+  min-height: 84px;
+  resize: vertical;
+  padding: 12px 14px;
+  border-radius: 16px;
+  border: 1.5px solid var(--hair);
+  background: var(--surface);
+  line-height: 1.5;
+}
+.m-app .open textarea:focus {
+  outline: none;
+  border-color: var(--deep);
+}
+.m-app .open .text-btn {
+  align-self: flex-start;
+}
+
+/* Reveal */
+.m-app .reveal {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  animation: m-fade 0.4s ease;
+}
+.m-app .coach {
+  margin: 0;
+  padding: 14px;
+  border-radius: 18px;
+  background: var(--surface-2);
+  font-size: 15px;
+}
+.m-app .coach b {
+  font-family: var(--display);
+}
+.m-app .earned {
+  font-weight: 800;
+  color: var(--good);
+}
+.m-app .src {
+  margin: 0;
+  font-size: 13px;
+  color: var(--ink-soft);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.m-app .src a {
+  color: inherit;
+  font-weight: 700;
+}
+.m-app .quote {
+  border-left: 3px solid var(--deep);
+  padding: 4px 10px;
+  font-style: italic;
+}
+.m-app .grade-box {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px;
+  border-radius: 18px;
+  border: 1.5px solid var(--hair);
+}
+.m-app .grade-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+}
+.m-app .grade-total {
+  font-family: var(--display);
+  font-weight: 800;
+  font-size: 30px;
+  font-variant-numeric: tabular-nums;
+}
+.m-app .grade-total small {
+  font-size: 15px;
+  color: var(--ink-soft);
+}
+.m-app .rubric {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 14px;
+}
+.m-app .rubric li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.m-app .bars {
+  display: flex;
+  gap: 3px;
+}
+.m-app .bars i {
+  width: 26px;
+  height: 8px;
+  border-radius: 4px;
+  background: var(--hair);
+}
+.m-app .bars i.on {
+  background: var(--deep);
+}
+.m-app .rubric-v {
+  width: 28px;
+  text-align: right;
+  color: var(--ink-soft);
+  font-weight: 700;
+}
+.m-app .missed {
+  margin: 0;
+  font-size: 14px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: var(--warn-bg);
+  color: var(--warn-ink);
+}
+.m-app .stronger {
+  padding: 12px 14px;
+  border-radius: 16px;
+  background: var(--tint);
+  border: 1.5px solid var(--deep);
+  color: #1e2230;
+  font-size: 15px;
+}
+.m-app .stronger b {
+  font-family: var(--display);
+  font-size: 13px;
+}
+.m-app .stronger p {
+  margin: 4px 0 0;
+}
+
+/* "+N" pop */
+.m-app .plus {
+  position: fixed;
+  left: 50%;
+  top: 38%;
+  translate: -50% 0;
+  z-index: 70;
+  font-family: var(--display);
+  font-weight: 800;
+  font-size: 44px;
+  color: #1e2230;
+  background: var(--sun);
+  border: 3px solid #1e2230;
+  box-shadow: 4px 4px 0 #1e2230;
+  padding: 4px 18px;
+  border-radius: 20px;
+  pointer-events: none;
+}
+
+/* Loading */
+.m-app .skel {
+  display: block;
+  height: 18px;
+  border-radius: 9px;
+  background: linear-gradient(90deg, var(--surface-2) 25%, var(--hair) 50%, var(--surface-2) 75%);
+  background-size: 200% 100%;
+  animation: m-shimmer 1.4s linear infinite;
+}
+.m-app .skel.tall {
+  height: 110px;
+  border-radius: 20px;
+}
+@keyframes m-shimmer {
+  to {
+    background-position: -200% 0;
+  }
+}
+
+/* ---------- Gear Card ---------- */
+.m-app .gcard {
+  position: relative;
+  overflow: hidden;
+  border-radius: 30px;
+  padding: 24px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.m-app .gcard .glow {
+  position: absolute;
+  inset: -40% -30% auto auto;
+  width: 280px;
+  height: 280px;
+  border-radius: 50%;
+  background: radial-gradient(circle, var(--tint) 0%, transparent 70%);
+  animation: m-drift 9s ease-in-out infinite alternate;
+}
+@keyframes m-drift {
+  to {
+    transform: translate(-40px, 30px) scale(1.15);
+  }
+}
+.m-app .gcard > * {
+  position: relative;
+}
+.m-app .score-line {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.m-app .score {
+  font-family: var(--display);
+  font-weight: 800;
+  font-size: 72px;
+  line-height: 1;
+  letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums;
+}
+.m-app .score small {
+  font-size: 24px;
+  color: var(--ink-soft);
+}
+/* Percent badge: the number people look for first */
+.m-app .pct {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 12px 18px;
+  border-radius: 22px;
+  background: var(--tint);
+  border: 2px solid var(--deep);
+  color: #1e2230;
+  animation: m-pop 0.6s cubic-bezier(0.2, 0.8, 0.2, 1.3) 0.3s both;
+}
+.m-app .pct b {
+  font-family: var(--display);
+  font-weight: 800;
+  font-size: 40px;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+.m-app .pct span {
+  font-size: 13px;
+  font-weight: 700;
+}
+@keyframes m-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.7);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.m-app .summary {
+  margin: 0;
+  font-size: 15px;
+}
+.m-app .points-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+.m-app .points-row > div {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 10px 6px;
+  border-radius: 16px;
+  background: var(--surface-2);
+  text-align: center;
+}
+.m-app .points-row b {
+  font-family: var(--display);
+  font-size: 24px;
+  font-weight: 800;
+  line-height: 1.1;
+}
+.m-app .points-row span {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ink-soft);
+}
+.m-app .bonus {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 14px;
+  color: var(--good);
+  font-weight: 700;
+}
+.m-app .row {
+  border-top: 1.5px solid var(--hair);
+  padding-top: 12px;
+}
+.m-app .row b {
+  display: block;
+  font-size: 13px;
+  color: var(--ink-soft);
+  margin-bottom: 2px;
+}
+
+/* ---------- Rewards ---------- */
+.m-app .reward-group {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.m-app .rcard {
+  background: var(--surface);
+  border-radius: 22px;
+  box-shadow: var(--shadow);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.m-app .rcard-top {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+.m-app .cost {
+  font-family: var(--display);
+  font-weight: 800;
+  font-size: 22px;
+}
+.m-app .cost::after {
+  content: ' pts';
+  font-size: 13px;
+  color: var(--ink-soft);
+}
+.m-app .modal-back {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  background: rgba(20, 22, 27, 0.5);
+  display: grid;
+  place-items: center;
+  padding: 20px;
+}
+.m-app .modal {
+  width: 100%;
+  max-width: 380px;
+  background: var(--surface);
+  border-radius: 26px;
+  padding: 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  text-align: center;
+  box-shadow: var(--shadow);
+}
+.m-app .modal p {
+  margin: 0;
+}
+.m-app .code {
+  font-family: var(--display);
+  font-size: 34px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  background: var(--sun);
+  color: #1e2230;
+  border: 3px solid #1e2230;
+  box-shadow: 4px 4px 0 #1e2230;
+  border-radius: 16px;
+  padding: 10px;
+}
+
+/* ---------- Road ---------- */
+.m-app .road {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 4;
+  padding: 10px 16px calc(12px + env(safe-area-inset-bottom, 0px));
+  background: linear-gradient(to top, var(--ground) 55%, transparent);
+  display: flex;
+  justify-content: center;
+  pointer-events: none;
+}
+.m-app .road-in {
+  width: 100%;
+  max-width: 420px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.m-app .road-meta {
+  display: flex;
+  justify-content: space-between;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink-soft);
+  font-variant-numeric: tabular-nums;
+}
+.m-app .track {
+  position: relative;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--hair);
+}
+.m-app .fill {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  border-radius: 3px;
+  width: 0;
+  transition: background-color 1s;
+}
+.m-app .car {
+  position: absolute;
+  top: 50%;
+  width: 16px;
+  height: 16px;
+  margin: -8px 0 0 -8px;
+  border-radius: 50%;
+  background: var(--surface);
+  border: 3px solid currentColor;
+  box-shadow: var(--shadow);
+}
+
+/* Reduced motion: everything at rest */
+@media (prefers-reduced-motion: reduce) {
+  .m-app .w {
+    opacity: 1 !important;
+    transform: none !important;
+  }
+  .m-app .motif path.draw {
+    stroke-dashoffset: 0 !important;
+  }
+}

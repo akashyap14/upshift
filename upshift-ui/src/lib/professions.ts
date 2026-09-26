@@ -67,12 +67,19 @@ export const COACH_TONE: Record<Level, { good: string; ok: string; low: string }
   3: { good: 'Correct.', ok: 'Partly there.', low: 'Stronger call below.' },
 }
 
+// Coach voice for A/B/C rounds (DESIGN.md §3): what to say when right, and before the best letter when not
+export const PICK_TONE: Record<Level, { good: string; miss: string }> = {
+  1: { good: 'Nice one!', miss: 'Close! The better pick is' },
+  2: { good: 'Right call.', miss: 'Better option:' },
+  3: { good: 'Correct. The trade-off:', miss: 'Stronger call:' },
+}
+
 // Level changes the pace: Junior slower and bouncier, Leader faster and terser
 export const MOTION_SPEED: Record<Level, number> = { 1: 1.4, 2: 1, 3: 0.5 }
 export const WORD_DELAY_MS: Record<Level, number> = { 1: 24, 2: 18, 3: 12 }
 
-// Build spec §4: 3.3 min per round, clamped to 1–12
-export const ROUND_MINUTES = 3.3
+// Spec v3 §6: 2.5 min per round, clamped to 1–12
+export const ROUND_MINUTES = 2.5
 export function roundsForEta(eta: number): number {
   return Math.max(1, Math.min(12, Math.floor(eta / ROUND_MINUTES)))
 }
