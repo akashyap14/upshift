@@ -28,31 +28,65 @@ Swagger UI: http://localhost:8080/q/swagger-ui
 
 ### 1. `POST /api/questions/generate`
 
+Generates **multiple-choice (MCQ)** questions for a profession and starts a quiz.
+
 ```json
 { "profession": "Software Engineer", "count": 5, "difficulty": "medium" }
 ```
-`count` (1-20, default 5) and `difficulty` (default `medium`) are optional.
+`count` (1-20, default 5) and `difficulty` (`easy` | `medium` | `hard`, default `medium`) are optional.
 
-Response:
+Response (note: **no correct answers**, they stay on the server):
 ```json
-{ "profession": "Software Engineer", "count": 5,
-  "questions": [ { "id": 1, "question": "...", "topic": "...", "difficulty": "medium" } ] }
+{ "quizId": "9138e39e-a728-4694-bd3d-ae264efe4eaa",
+  "profession": "Software Engineer",
+  "count": 5,
+  "expiresAt": "2026-09-26T09:44:07Z",
+  "questions": [
+    { "id": 1,
+      "question": "What is the time complexity of binary search on a sorted array?",
+      "options": [
+        { "id": "A", "text": "O(n log n)" },
+        { "id": "B", "text": "O(n)" },
+        { "id": "C", "text": "O(log n)" },
+        { "id": "D", "text": "O(1)" }
+      ],
+      "topic": "Algorithms",
+      "difficulty": "medium" } ] }
 ```
+
+Every question has exactly 4 distinct options (A-D) and one correct answer. Options are
+shuffled server-side so the correct answer's position is random. Malformed questions from the
+AI are dropped, so `count` may occasionally be lower than requested.
 
 ### 2. `POST /api/questions/evaluate`
 
-Send the generated questions back with the user's answers:
+Submit the chosen option for each question. The server grades it and only then reveals the
+correct answers and explanations.
+
 ```json
-{ "profession": "Software Engineer",
-  "answers": [ { "id": 1, "question": "...", "answer": "user's answer" } ] }
+{ "quizId": "9138e39e-a728-4694-bd3d-ae264efe4eaa",
+  "answers": [
+    { "questionId": 1, "selectedOption": "C" },
+    { "questionId": 2, "selectedOption": "A" } ] }
 ```
 
 Response:
 ```json
-{ "profession": "Software Engineer", "overallScore": 72, "summary": "...",
-  "strengths": ["..."], "improvements": ["..."],
-  "results": [ { "id": 1, "question": "...", "score": 7, "feedback": "...", "idealAnswer": "..." } ] }
+{ "quizId": "9138e39e-a728-4694-bd3d-ae264efe4eaa",
+  "profession": "Software Engineer",
+  "totalQuestions": 5, "answered": 2, "correct": 1, "scorePercent": 20,
+  "results": [
+    { "questionId": 1, "question": "...", "options": [ ... ],
+      "selectedOption": "C", "correctAnswer": "C", "correct": true,
+      "explanation": "Binary search halves the search space each step." } ] }
 ```
+
+Rules:
+- Unanswered questions count as incorrect (`selectedOption: null`).
+- `selectedOption` is `A`-`D` (case-insensitive).
+- A quiz can be submitted **once** (a second submit returns `409`); a rejected (`400`) submit doesn't count.
+- Quizzes expire after 2 hours (`upshift.quiz.ttl`). Quizzes are kept in memory, so they are lost on
+  restart and not shared across multiple backend instances.
 
 ## Errors
 
@@ -65,8 +99,10 @@ Every error returns the same JSON shape, so the UI can always show `message`:
 
 | Status | When |
 |--------|------|
-| `400`  | Missing/invalid fields (`details` lists each problem), malformed JSON, wrong field types |
+| `400`  | Missing/invalid fields (`details` lists each problem), malformed JSON, wrong field types, unknown or duplicate `questionId` |
 | `404` / `405` / `415` | Unknown endpoint, wrong HTTP method, Content-Type not `application/json` |
+| `404`  | `quizId` unknown or expired |
+| `409`  | Quiz already submitted |
 | `422`  | Profession isn't a real job title (gibberish or prompt-injection attempts) |
 | `502`  | AI returned unusable output, or the API key was rejected |
 | `503`  | AI service unreachable, rate-limited or overloaded; safe to retry |

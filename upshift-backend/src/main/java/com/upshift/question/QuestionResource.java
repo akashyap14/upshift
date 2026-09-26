@@ -21,14 +21,14 @@ public class QuestionResource {
     @Inject
     QuestionService service;
 
-    /** Endpoint 1: UI sends a profession, gets back generated interview questions. */
+    /** Endpoint 1: UI sends a profession, gets back a quizId and MCQs (without answers). */
     @POST
     @Path("/generate")
     public GenerateResponse generate(@NotNull @Valid GenerateRequest request) {
         return service.generate(request);
     }
 
-    /** Endpoint 2: UI sends the generated questions with the user's answers, gets back scores and feedback. */
+    /** Endpoint 2: UI sends the quizId and chosen options; the server grades and reveals the answers. */
     @POST
     @Path("/evaluate")
     public EvaluateResponse evaluate(@NotNull @Valid EvaluateRequest request) {

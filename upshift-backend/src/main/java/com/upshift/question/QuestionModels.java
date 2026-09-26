@@ -5,11 +5,11 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Locale;
 
@@ -35,42 +35,72 @@ public final class QuestionModels {
         }
     }
 
-    @JsonIgnoreProperties(ignoreUnknown = true)
-    public record Question(int id, String question, String topic, String difficulty) {
+    /** One answer choice, labelled A-D. */
+    public record Option(String id, String text) {
     }
 
-    public record GenerateResponse(String profession, int count, List<Question> questions) {
+    /** A multiple-choice question as sent to the UI. Deliberately has no correct answer. */
+    public record Question(int id, String question, List<Option> options, String topic, String difficulty) {
+    }
+
+    public record GenerateResponse(
+            String quizId,
+            String profession,
+            int count,
+            Instant expiresAt,
+            List<Question> questions) {
     }
 
     /** Raw shape Claude returns; either questions, or an error when the profession is invalid. */
     @JsonIgnoreProperties(ignoreUnknown = true)
-    public record AiGenerateResult(String error, String reason, List<Question> questions) {
+    public record AiGenerateResult(String error, String reason, List<AiQuestion> questions) {
+    }
+
+    /** Raw question from Claude: 4 option texts plus the 0-based index of the correct one. */
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public record AiQuestion(
+            String question,
+            List<String> options,
+            Integer correctIndex,
+            String explanation,
+            String topic,
+            String difficulty) {
     }
 
     // ---- Endpoint 2: evaluate ----
 
-    public record AnsweredQuestion(
-            int id,
-            @NotBlank String question,
-            @NotNull String answer) {
+    public record SelectedAnswer(
+            @NotNull @Min(1) Integer questionId,
+            @NotBlank
+            @Pattern(regexp = "(?i)[A-D]", message = "must be one of: A, B, C, D")
+            String selectedOption) {
     }
 
     public record EvaluateRequest(
-            @NotBlank @Size(max = 100) String profession,
-            @NotEmpty @Size(max = 20) List<@Valid AnsweredQuestion> answers) {
+            @NotBlank
+            @Pattern(regexp = "[0-9a-fA-F-]{36}", message = "must be the quizId returned by /generate")
+            String quizId,
+            @NotNull @Size(max = 20) List<@NotNull @Valid SelectedAnswer> answers) {
     }
 
-    @JsonIgnoreProperties(ignoreUnknown = true)
-    public record QuestionResult(int id, String question, int score, String feedback, String idealAnswer) {
+    /** Per-question result; correct answer and explanation are only revealed after submission. */
+    public record QuestionResult(
+            int questionId,
+            String question,
+            List<Option> options,
+            String selectedOption,
+            String correctAnswer,
+            boolean correct,
+            String explanation) {
     }
 
-    @JsonIgnoreProperties(ignoreUnknown = true)
     public record EvaluateResponse(
+            String quizId,
             String profession,
-            int overallScore,
-            String summary,
-            List<String> strengths,
-            List<String> improvements,
+            int totalQuestions,
+            int answered,
+            int correct,
+            int scorePercent,
             List<QuestionResult> results) {
     }
 }

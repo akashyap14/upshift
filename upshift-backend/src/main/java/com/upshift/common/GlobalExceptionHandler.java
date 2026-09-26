@@ -28,6 +28,21 @@ public class GlobalExceptionHandler {
     }
 
     @ServerExceptionMapper
+    public Response quizNotFound(QuizNotFoundException e) {
+        return json(404, e.getMessage(), null);
+    }
+
+    @ServerExceptionMapper
+    public Response quizAlreadySubmitted(QuizAlreadySubmittedException e) {
+        return json(409, e.getMessage(), null);
+    }
+
+    @ServerExceptionMapper
+    public Response invalidSubmission(InvalidSubmissionException e) {
+        return json(400, e.getMessage(), e.details());
+    }
+
+    @ServerExceptionMapper
     public Response validation(ConstraintViolationException e) {
         List<String> details = e.getConstraintViolations().stream()
                 .map(GlobalExceptionHandler::describe)
