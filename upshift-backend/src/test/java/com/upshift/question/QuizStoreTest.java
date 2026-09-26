@@ -38,7 +38,7 @@ class QuizStoreTest {
 
     @Test
     void findsSavedQuizCaseInsensitively() {
-        Quiz quiz = store.save("Chef", QUESTIONS);
+        Quiz quiz = store.save("Chef", QUESTIONS, List.of());
         assertTrue(store.find(quiz.id()).isPresent());
         assertTrue(store.find(quiz.id().toUpperCase()).isPresent());
         assertEquals(now.plus(Duration.ofHours(2)), quiz.expiresAt());
@@ -46,7 +46,7 @@ class QuizStoreTest {
 
     @Test
     void expiredQuizIsNotFound() {
-        Quiz quiz = store.save("Chef", QUESTIONS);
+        Quiz quiz = store.save("Chef", QUESTIONS, List.of());
         store.clock = Clock.fixed(now.plus(Duration.ofHours(2)), ZoneOffset.UTC);
         assertFalse(store.find(quiz.id()).isPresent());
         assertEquals(0, store.size());
@@ -54,10 +54,10 @@ class QuizStoreTest {
 
     @Test
     void evictsOldestWhenFull() {
-        Quiz first = store.save("A", QUESTIONS);
+        Quiz first = store.save("A", QUESTIONS, List.of());
         for (int i = 1; i <= 3; i++) {
             store.clock = Clock.fixed(now.plusSeconds(i), ZoneOffset.UTC);
-            store.save("P" + i, QUESTIONS);
+            store.save("P" + i, QUESTIONS, List.of());
         }
         assertEquals(3, store.size());
         assertFalse(store.find(first.id()).isPresent());
@@ -65,7 +65,7 @@ class QuizStoreTest {
 
     @Test
     void quizCanOnlyBeSubmittedOnce() {
-        Quiz quiz = store.save("Chef", QUESTIONS);
+        Quiz quiz = store.save("Chef", QUESTIONS, List.of());
         assertTrue(quiz.markSubmitted());
         assertFalse(quiz.markSubmitted());
     }

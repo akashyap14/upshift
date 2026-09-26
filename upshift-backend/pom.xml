@@ -52,6 +52,12 @@
             <artifactId>quarkus-arc</artifactId>
         </dependency>
         <dependency>
+            <!-- Text extraction from uploaded PDFs (admin question generation) -->
+            <groupId>org.apache.pdfbox</groupId>
+            <artifactId>pdfbox</artifactId>
+            <version>3.0.7</version>
+        </dependency>
+        <dependency>
             <groupId>io.quarkus</groupId>
             <artifactId>quarkus-junit</artifactId>
             <scope>test</scope>

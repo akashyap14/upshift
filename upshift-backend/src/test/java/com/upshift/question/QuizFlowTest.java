@@ -1,6 +1,8 @@
 package com.upshift.question;
 
 import com.upshift.ai.AiService;
+import com.upshift.ai.AiService.Reply;
+import com.upshift.ai.ChatModels.Source;
 import com.upshift.common.UpstreamException;
 import com.upshift.question.QuestionModels.AiGenerateResult;
 import com.upshift.question.QuestionModels.AiQuestion;
@@ -28,6 +30,7 @@ import static org.hamcrest.Matchers.not;
 import static org.hamcrest.Matchers.notNullValue;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /** End-to-end generate -> evaluate flow with the AI replaced by a fixed fake. */
 @QuarkusTest
@@ -41,30 +44,44 @@ class QuizFlowTest {
 
     private static final AiGenerateResult GOOD = new AiGenerateResult(null, null, List.of(
             new AiQuestion("Binary search complexity?", List.of("O(log n)", "O(n)", "O(1)", "O(n^2)"), 0,
-                    "Halves each step.", "Algorithms", "medium"),
+                    "Halves each step.", "Algorithms", "medium", List.of("https://example.com/big-o")),
             // Invalid: only 3 options, must be dropped.
-            new AiQuestion("Broken?", List.of("x", "y", "z"), 0, "n/a", "Bad", "medium"),
+            new AiQuestion("Broken?", List.of("x", "y", "z"), 0, "n/a", "Bad", "medium", null),
             new AiQuestion("Filter aggregates with?", List.of("WHERE", "HAVING", "ORDER BY", "GROUP BY"), 1,
-                    "HAVING filters groups.", "SQL", "medium"),
+                    "HAVING filters groups.", "SQL", "medium",
+                    // The made-up URL wasn't in the search results, so it must never be shown.
+                    List.of("https://made-up.example/not-a-result", "https://example.com/having")),
             // Invalid: duplicate options, must be dropped.
-            new AiQuestion("Dupes?", List.of("a", "a", "b", "c"), 2, "n/a", "Bad", "medium"),
+            new AiQuestion("Dupes?", List.of("a", "a", "b", "c"), 2, "n/a", "Bad", "medium", null),
             new AiQuestion("Version control tool?", List.of("Make", "Git", "Docker", "Bash"), 1,
-                    "Git tracks changes.", "Tools", "medium")));
+                    "Git tracks changes.", "Tools", "medium", null)));
 
     static AiGenerateResult nextResult = GOOD;
     /** Scripted replies consumed first: an AiGenerateResult to return or a RuntimeException to throw. */
     static final Deque<Object> script = new ArrayDeque<>();
     static final AtomicInteger calls = new AtomicInteger();
+    /** What the last call asked for, so tests can check web search was requested (or not). */
+    static volatile boolean lastWebSearch;
+    static volatile String lastSystemPrompt;
+    /** Pages the fake "web search" returns when search is requested. */
+    static final List<Source> SEARCH_RESULTS = List.of(
+            new Source("Big-O cheat sheet", "https://example.com/big-o"),
+            new Source("SQL HAVING explained", "https://example.com/having"),
+            new Source("Git handbook", "https://example.com/git"));
 
     static class FakeAi extends AiService {
         @Override
-        public <T> T askForJson(String systemPrompt, String userPrompt, Class<T> type) {
+        public <T> Reply<T> ask(String systemPrompt, String userPrompt, Class<T> type, boolean webSearch) {
             calls.incrementAndGet();
+            lastWebSearch = webSearch;
+            lastSystemPrompt = systemPrompt;
             Object next = script.isEmpty() ? nextResult : script.poll();
             if (next instanceof RuntimeException e) {
                 throw e;
             }
-            return type.cast(next);
+            return webSearch
+                    ? new Reply<>(type.cast(next), SEARCH_RESULTS, 2)
+                    : new Reply<>(type.cast(next), List.of(), 0);
         }
     }
 
@@ -73,6 +90,8 @@ class QuizFlowTest {
         nextResult = GOOD;
         script.clear();
         calls.set(0);
+        lastWebSearch = false;
+        lastSystemPrompt = null;
         QuarkusMock.installMockForType(new FakeAi(), AiService.class);
     }
 
@@ -252,8 +271,8 @@ class QuizFlowTest {
     @Test
     void noValidMcqsIs502() {
         nextResult = new AiGenerateResult(null, null, List.of(
-                new AiQuestion("Broken?", List.of("x", "y"), 0, "n/a", "Bad", "medium"),
-                new AiQuestion("Bad index?", List.of("a", "b", "c", "d"), 7, "n/a", "Bad", "medium")));
+                new AiQuestion("Broken?", List.of("x", "y"), 0, "n/a", "Bad", "medium", null),
+                new AiQuestion("Bad index?", List.of("a", "b", "c", "d"), 7, "n/a", "Bad", "medium", null)));
         given().contentType(ContentType.JSON).body("{\"profession\":\"Chef\"}")
                 .when().post("/api/questions/generate")
                 .then().statusCode(502).body("message", not(containsString("index")));
@@ -286,5 +305,68 @@ class QuizFlowTest {
                 .when().post("/api/questions/generate")
                 .then().statusCode(503);
         assertEquals(1, calls.get());
+    }
+
+    @Test
+    void retryAfterUnusableOutputDoesNotSearchTheWebAgain() {
+        script.add(new UpstreamException(502, "The AI service returned an unexpected response.", null));
+        given().contentType(ContentType.JSON).body("{\"profession\":\"Chef\",\"webSearch\":true}")
+                .when().post("/api/questions/generate")
+                .then().statusCode(200)
+                .body("webSearch", is(false))
+                .body("sources", hasSize(0));
+        assertEquals(2, calls.get());
+        assertFalse(lastWebSearch); // the retry ran without the (billed) search tool
+    }
+
+    @Test
+    void webSearchIsOffByDefault() {
+        given().contentType(ContentType.JSON).body("{\"profession\":\"Chef\"}")
+                .when().post("/api/questions/generate")
+                .then().statusCode(200)
+                .body("webSearch", is(false))
+                .body("sources", hasSize(0));
+        assertFalse(lastWebSearch);
+        assertFalse(lastSystemPrompt.contains("web_search"));
+    }
+
+    @Test
+    void webSearchReturnsOnlyRealCitedSources() {
+        String quizId = given().contentType(ContentType.JSON)
+                .body("{\"profession\":\"Software Engineer\",\"webSearch\":true}")
+                .when().post("/api/questions/generate")
+                .then().statusCode(200)
+                .body("webSearch", is(true))
+                .body("sources.url", is(List.of("https://example.com/big-o", "https://example.com/having")))
+                .body("sources[0].title", is("Big-O cheat sheet"))
+                .extract().path("quizId");
+        assertTrue(lastWebSearch);
+        assertTrue(lastSystemPrompt.contains("web_search"));
+
+        // The same sources come back with the graded results.
+        submit("{\"quizId\":\"%s\",\"answers\":[]}".formatted(quizId))
+                .statusCode(200)
+                .body("sources.url", hasItem("https://example.com/having"));
+    }
+
+    @Test
+    void webSearchFallsBackToTopResultsWhenNothingCited() {
+        nextResult = new AiGenerateResult(null, null, List.of(
+                new AiQuestion("Version control tool?", List.of("Make", "Git", "Docker", "Bash"), 1,
+                        "Git tracks changes.", "Tools", "medium", List.of())));
+        given().contentType(ContentType.JSON).body("{\"profession\":\"Chef\",\"webSearch\":true}")
+                .when().post("/api/questions/generate")
+                .then().statusCode(200)
+                .body("sources", hasSize(3));
+    }
+
+    @Test
+    void webSearchSourcesAreNotLeakedAsAnswers() {
+        String raw = given().contentType(ContentType.JSON)
+                .body("{\"profession\":\"Software Engineer\",\"webSearch\":true}")
+                .when().post("/api/questions/generate")
+                .then().statusCode(200).extract().asString();
+        assertFalse(raw.contains("correctAnswer"), raw);
+        assertFalse(raw.contains("made-up.example"), raw);
     }
 }

@@ -16,6 +16,23 @@ Open http://localhost:5173. Vite proxies `/api` to `http://localhost:8080` (over
 
 Read-aloud uses the browser's speech synthesis.
 
+## End-to-end tests
+
+Playwright, using your installed Chrome (no browser download). Start the backend first, then:
+
+```sh
+npm run e2e                        # API + UI tests; builds and serves the production bundle on :4173
+npx playwright test --project=ui   # just the browser tests
+npx playwright show-report e2e-report
+```
+
+- `e2e/api.spec.ts`: technical checks of the backend API (contract, validation, errors, answer-key
+  secrecy, web search sources, CORS, concurrency, latency).
+- `e2e/ui.spec.ts`: functional rides in the browser. "stubbed" tests fake the API to check UI
+  behaviour exactly; "live" tests play real rides against the backend and Claude.
+
+A full run makes ~13 real Claude calls (a few with web search), so it costs a few cents.
+
 ## Structure
 
 - `src/lib/professions.ts` — the 10 professions, tints, motifs, level pacing, round sizing

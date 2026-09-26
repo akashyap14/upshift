@@ -12,7 +12,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class McqValidationTest {
 
     private static AiQuestion mcq(String question, List<String> options, Integer correctIndex) {
-        return new AiQuestion(question, options, correctIndex, "because", "topic", "medium");
+        return new AiQuestion(question, options, correctIndex, "because", "topic", "medium", null);
     }
 
     private static final List<String> FOUR = List.of("a", "b", "c", "d");

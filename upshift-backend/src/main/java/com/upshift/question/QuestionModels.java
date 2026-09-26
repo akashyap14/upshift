@@ -1,6 +1,7 @@
 package com.upshift.question;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.upshift.ai.ChatModels.Source;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
@@ -24,15 +25,26 @@ public final class QuestionModels {
             @NotBlank @Size(min = 2, max = 100) String profession,
             @Min(1) @Max(20) Integer count,
             @Pattern(regexp = "(?i)easy|medium|hard", message = "must be one of: easy, medium, hard")
-            String difficulty) {
+            String difficulty,
+            // Let Claude search the web for current information; null uses the server default.
+            Boolean webSearch) {
 
         public int countOrDefault() {
-            return count == null ? 5 : count;
+            return QuestionModels.countOrDefault(count);
         }
 
         public String difficultyOrDefault() {
-            return difficulty == null ? "medium" : difficulty.toLowerCase(Locale.ROOT);
+            return QuestionModels.difficultyOrDefault(difficulty);
         }
+    }
+
+    /** Defaults shared by the player and admin question APIs. */
+    public static int countOrDefault(Integer count) {
+        return count == null ? 5 : count;
+    }
+
+    public static String difficultyOrDefault(String difficulty) {
+        return difficulty == null ? "medium" : difficulty.toLowerCase(Locale.ROOT);
     }
 
     /** One answer choice, labelled A-D. */
@@ -48,7 +60,10 @@ public final class QuestionModels {
             String profession,
             int count,
             Instant expiresAt,
-            List<Question> questions) {
+            List<Question> questions,
+            // True when questions draw on web search; sources must then be shown to the user.
+            boolean webSearch,
+            List<Source> sources) {
     }
 
     /** Raw shape Claude returns; either questions, or an error when the profession is invalid. */
@@ -64,7 +79,9 @@ public final class QuestionModels {
             Integer correctIndex,
             String explanation,
             String topic,
-            String difficulty) {
+            String difficulty,
+            // URLs from web search results the question is based on (only when searching).
+            List<String> sources) {
     }
 
     // ---- Endpoint 2: evaluate ----
@@ -101,6 +118,7 @@ public final class QuestionModels {
             int answered,
             int correct,
             int scorePercent,
-            List<QuestionResult> results) {
+            List<QuestionResult> results,
+            List<Source> sources) {
     }
 }
