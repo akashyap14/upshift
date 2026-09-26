@@ -1,5 +1,6 @@
 package com.upshift.question;
 
+import com.upshift.ai.ChatModels.Source;
 import com.upshift.question.QuestionModels.Question;
 import jakarta.enterprise.context.ApplicationScoped;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
@@ -30,14 +31,17 @@ public class QuizStore {
         private final String id;
         private final String profession;
         private final List<StoredQuestion> questions;
+        private final List<Source> sources;
         private final Instant createdAt;
         private final Instant expiresAt;
         private final AtomicBoolean submitted = new AtomicBoolean(false);
 
-        Quiz(String id, String profession, List<StoredQuestion> questions, Instant createdAt, Instant expiresAt) {
+        Quiz(String id, String profession, List<StoredQuestion> questions, List<Source> sources,
+             Instant createdAt, Instant expiresAt) {
             this.id = id;
             this.profession = profession;
             this.questions = List.copyOf(questions);
+            this.sources = List.copyOf(sources);
             this.createdAt = createdAt;
             this.expiresAt = expiresAt;
         }
@@ -52,6 +56,10 @@ public class QuizStore {
 
         public List<StoredQuestion> questions() {
             return questions;
+        }
+
+        public List<Source> sources() {
+            return sources;
         }
 
         public Instant expiresAt() {
@@ -74,7 +82,7 @@ public class QuizStore {
 
     Clock clock = Clock.systemUTC();
 
-    public Quiz save(String profession, List<StoredQuestion> questions) {
+    public Quiz save(String profession, List<StoredQuestion> questions, List<Source> sources) {
         Instant now = clock.instant();
         purgeExpired(now);
         while (quizzes.size() >= maxStored) {
@@ -82,7 +90,8 @@ public class QuizStore {
                     .min(Comparator.comparing(q -> q.createdAt))
                     .ifPresent(oldest -> quizzes.remove(oldest.id));
         }
-        Quiz quiz = new Quiz(UUID.randomUUID().toString(), profession, questions, now, now.plus(ttl));
+        Quiz quiz = new Quiz(UUID.randomUUID().toString(), profession, questions, sources, now,
+                now.plus(ttl));
         quizzes.put(quiz.id, quiz);
         return quiz;
     }

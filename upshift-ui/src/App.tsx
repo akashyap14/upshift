@@ -12,7 +12,15 @@ import { Setup, type SetupValues } from './screens/Setup'
 type Screen = 'setup' | 'round' | 'card'
 
 export default function App() {
-  const [values, setValues] = useState<SetupValues>({ profId: 'sde', level: 2, track: 'mixed', eta: 24, passenger: true })
+  const [values, setValues] = useState<SetupValues>(() => ({
+    profId: 'sde',
+    level: 2,
+    track: 'mixed',
+    eta: 24,
+    passenger: true,
+    // Web search is opt-in: it's slower and each search is billed (matches the backend default).
+    web: localStorage.getItem('upshift.web') === 'on',
+  }))
   const [preview, setPreview] = useState<string | null>(null)
   const [screen, setScreen] = useState<Screen>('setup')
   const [rideId, setRideId] = useState(0)
@@ -32,6 +40,10 @@ export default function App() {
     mq.addEventListener('change', onChange)
     return () => mq.removeEventListener('change', onChange)
   }, [shown])
+
+  useEffect(() => {
+    localStorage.setItem('upshift.web', values.web ? 'on' : 'off')
+  }, [values.web])
 
   useEffect(() => {
     localStorage.setItem('upshift.voice', voice ? 'on' : 'off')
@@ -115,6 +127,7 @@ export default function App() {
             track={values.track}
             eta={values.eta}
             voice={voice}
+            web={values.web}
             bloom={bloom}
             onChangeProf={(id) => {
               setPreview(null)

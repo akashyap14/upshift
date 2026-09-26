@@ -1,3 +1,4 @@
+import { Sources } from '../components/Sources'
 import type { Option, OptionId } from '../lib/api'
 import { COACH_TONE, LEVEL_NAME, type Level, type Profession } from '../lib/professions'
 import type { RideResult } from './Round'
@@ -79,6 +80,7 @@ export function GearCard({ prof, level, eta, ride, onAgain, onChange }: Props) {
             </li>
           ))}
         </ol>
+        <Sources sources={ride.evaluation.sources ?? []} />
       </div>
 
       <button className="go" type="button" onClick={onAgain}>

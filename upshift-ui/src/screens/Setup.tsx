@@ -9,6 +9,7 @@ export interface SetupValues {
   track: Track
   eta: number
   passenger: boolean
+  web: boolean
 }
 
 interface Props {
@@ -77,6 +78,10 @@ export function Setup({ values, shown, onChange, onPreview, onStart }: Props) {
             onChange={(e) => onChange({ eta: +e.target.value })}
           />
         </div>
+        <label className="check">
+          <input type="checkbox" checked={values.web} onChange={(e) => onChange({ web: e.target.checked })} />
+          Pull in the latest from the web
+        </label>
         <label className="check">
           <input type="checkbox" checked={values.passenger} onChange={(e) => onChange({ passenger: e.target.checked })} />
           I’m a passenger, not driving

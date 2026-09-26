@@ -628,6 +628,39 @@ input[type='range'] {
   color: var(--deep-ink);
 }
 
+/* Web sources */
+.sources {
+  font-size: 13px;
+  color: var(--ink-soft);
+}
+.sources summary {
+  cursor: pointer;
+  font-weight: 700;
+  min-height: 32px;
+  display: flex;
+  align-items: center;
+}
+.sources ul {
+  margin: 6px 0 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.sources li {
+  display: flex;
+  flex-direction: column;
+}
+.sources a {
+  color: var(--ink);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.sources small {
+  font-size: 12px;
+}
+
 /* Gear Card review */
 .review {
   margin: 0;

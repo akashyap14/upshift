@@ -3,7 +3,8 @@ import type { BloomHandle } from '../components/Bloom'
 import { Kinetic } from '../components/Kinetic'
 import { Motif } from '../components/Motif'
 import { ProfessionPicker } from '../components/ProfessionPicker'
-import { evaluateAnswers, generateQuestions, type EvaluateResponse, type OptionId, type Question } from '../lib/api'
+import { Sources } from '../components/Sources'
+import { evaluateAnswers, generateQuestions, type EvaluateResponse, type OptionId, type Question, type Source } from '../lib/api'
 import {
   LEVEL_DIFFICULTY,
   WORD_DELAY_MS,
@@ -27,6 +28,7 @@ interface Props {
   track: Track
   eta: number
   voice: boolean
+  web: boolean
   bloom: RefObject<BloomHandle | null>
   onChangeProf(id: string): void
   onPreview(id: string | null): void
@@ -37,12 +39,13 @@ interface Props {
 const OPTION_KEYS: OptionId[] = ['A', 'B', 'C', 'D']
 
 export function Round(props: Props) {
-  const { prof, shown, level, track, eta, voice, onProgress, onArrive } = props
+  const { prof, shown, level, track, eta, voice, web, onProgress, onArrive } = props
   const count = roundsForEta(eta)
   const profession = professionForTrack(prof, track)
 
   const [quizId, setQuizId] = useState<string | null>(null)
   const [questions, setQuestions] = useState<Question[] | null>(null)
+  const [sources, setSources] = useState<Source[]>([])
   const [loadError, setLoadError] = useState<string | null>(null)
   const [attempt, setAttempt] = useState(0)
   const [idx, setIdx] = useState(0)
@@ -53,17 +56,18 @@ export function Round(props: Props) {
   // Load this ride's rounds (the component remounts when the profession changes)
   useEffect(() => {
     const ctrl = new AbortController()
-    generateQuestions({ profession, count, difficulty: LEVEL_DIFFICULTY[level] }, ctrl.signal)
+    generateQuestions({ profession, count, difficulty: LEVEL_DIFFICULTY[level], webSearch: web }, ctrl.signal)
       .then((r) => {
         if (!r.questions?.length) throw new Error('No rounds came back. Try again.')
         setQuizId(r.quizId)
         setQuestions(r.questions.slice(0, count))
+        setSources(r.sources ?? [])
       })
       .catch((e: Error) => {
         if (e.name !== 'AbortError') setLoadError(e.message)
       })
     return () => ctrl.abort()
-  }, [profession, count, level, attempt])
+  }, [profession, count, level, web, attempt])
 
   const q = questions?.[idx]
   const picked = q ? picks[q.id] : undefined
@@ -141,7 +145,10 @@ export function Round(props: Props) {
           <div className="skel" style={{ width: '90%' }} />
           <div className="skel" style={{ width: '70%' }} />
           <div className="skel tall" />
-          <p className="hint">Picking {count} {count === 1 ? 'round' : 'rounds'} for a {prof.name.toLowerCase()} on a {eta}-minute ride…</p>
+          <p className="hint">
+            {web ? 'Checking the web for the latest, then picking' : 'Picking'} {count} {count === 1 ? 'round' : 'rounds'} for a{' '}
+            {prof.name.toLowerCase()} on a {eta}-minute ride…
+          </p>
         </div>
       )}
 
@@ -185,6 +192,8 @@ export function Round(props: Props) {
             <p className="hint" aria-live="polite">
               {picked ? `You picked ${picked}. You can still change it.` : 'Tap an answer, or press A–D.'}
             </p>
+
+            <Sources sources={sources} />
 
             {gradeError && (
               <p className="coach err" role="alert">

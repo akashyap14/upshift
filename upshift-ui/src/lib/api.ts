@@ -16,12 +16,20 @@ export interface Question {
   difficulty: string
 }
 
+// A web page the questions drew on (only when web search was used). Show these to the user.
+export interface Source {
+  title: string
+  url: string
+}
+
 export interface GenerateResponse {
   quizId: string
   profession: string
   count: number
   expiresAt: string
   questions: Question[]
+  webSearch: boolean
+  sources: Source[]
 }
 
 export interface SelectedAnswer {
@@ -47,6 +55,7 @@ export interface EvaluateResponse {
   correct: number
   scorePercent: number
   results: QuestionResult[]
+  sources: Source[]
 }
 
 const BASE = import.meta.env.VITE_API_BASE ?? ''
@@ -81,7 +90,7 @@ async function post<T>(path: string, body: unknown, signal?: AbortSignal): Promi
 }
 
 export function generateQuestions(
-  req: { profession: string; count: number; difficulty: string },
+  req: { profession: string; count: number; difficulty: string; webSearch?: boolean },
   signal?: AbortSignal,
 ) {
   return post<GenerateResponse>('/api/questions/generate', req, signal)
